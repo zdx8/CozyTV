@@ -72,6 +72,7 @@ fun AppTile(
     width: Dp,
     height: Dp,
     showNames: Boolean,
+    showNameOnFocus: Boolean = false,
     modifier: Modifier = Modifier,
     useBanner: Boolean = true,
     androidIcon: Boolean = false,
@@ -104,6 +105,7 @@ fun AppTile(
     val bannerImage = remember(app.banner) { app.banner?.asImageBitmap() }
     val iconImage = remember(app.icon) { app.icon?.asImageBitmap() }
     val accent = Color(app.accentColor)
+    val showTileName = showNames || (showNameOnFocus && focused)
 
     Box(
         modifier
@@ -217,9 +219,9 @@ fun AppTile(
                 IconOrMonogram(
                     image = iconImage,
                     label = app.label,
-                    modifier = Modifier.size(if (showNames) 38.dp else 44.dp),
+                    modifier = Modifier.size(if (showTileName) 38.dp else 44.dp),
                 )
-                if (showNames) {
+                if (showTileName) {
                     Spacer(Modifier.height(3.dp))
                     BasicText(
                         text = app.label,
@@ -245,7 +247,7 @@ fun AppTile(
                         ),
                     ),
             )
-            if (showNames) {
+            if (showTileName) {
                 BasicText(
                     text = app.label,
                     style = CozyType.Label,
@@ -257,7 +259,7 @@ fun AppTile(
                 )
             }
         } else {
-            if (showNames) {
+            if (showTileName) {
                 IconOrMonogram(
                     image = iconImage,
                     label = app.label,
