@@ -31,8 +31,8 @@ android {
         applicationId = "app.cozytv"
         minSdk = 23
         targetSdk = 36
-        versionCode = versionCodeOverride ?: 7
-        versionName = versionNameOverride ?: "0.3.4"
+        versionCode = versionCodeOverride ?: 8
+        versionName = versionNameOverride ?: "0.3.5"
         buildConfigField(
             "String",
             "UPDATE_MANIFEST_URL",
