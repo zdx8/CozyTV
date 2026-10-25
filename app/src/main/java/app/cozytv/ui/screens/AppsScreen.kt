@@ -107,7 +107,7 @@ fun AppsScreen(vm: LauncherViewModel) {
                     contentPadding = PaddingValues(
                         start = 54.dp,
                         end = 54.dp,
-                        top = 12.dp,
+                        top = 4.dp,
                         bottom = 24.dp,
                     ),
                     modifier = Modifier
