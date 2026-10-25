@@ -257,15 +257,15 @@ fun AppTile(
                 )
             }
         } else {
-            IconOrMonogram(
-                image = iconImage,
-                label = app.label,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .size(34.dp),
-            )
             if (showNames) {
+                IconOrMonogram(
+                    image = iconImage,
+                    label = app.label,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                        .size(34.dp),
+                )
                 Column(
                     Modifier
                         .align(Alignment.BottomStart)
