@@ -120,7 +120,7 @@ fun AppsScreen(vm: LauncherViewModel) {
                             width = 158.dp,
                             height = 88.dp,
                             showNames = vm.showNames,
-                            useBanner = false,
+                            useBanner = true,
                             hidden = app.key in vm.hiddenKeys,
                             focusRequester = requester(app),
                             onClick = { vm.launch(app) },
