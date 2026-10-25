@@ -16,6 +16,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import app.cozytv.data.BingWallpaperRepository
+import app.cozytv.data.LauncherPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,12 +32,34 @@ class CozyDream : DreamService() {
     private var imageView: ImageView? = null
     private var clockView: TextView? = null
     private var dateView: TextView? = null
-    private var wallpaperBitmap: Bitmap? = null
+    private var wallpaperBitmaps: List<Bitmap> = emptyList()
+    private var carouselIndex = 0
 
     private val tick = object : Runnable {
         override fun run() {
             updateClock()
             handler.postDelayed(this, 30_000)
+        }
+    }
+
+    private val carousel = object : Runnable {
+        override fun run() {
+            val images = wallpaperBitmaps
+            val view = imageView
+            if (images.size < 2 || view == null) return
+            val next = (carouselIndex + 1) % images.size
+            view.animate().cancel()
+            view.animate()
+                .alpha(0f)
+                .setDuration(700)
+                .withEndAction {
+                    imageView?.setImageBitmap(images[next])
+                    imageView?.alpha = 0f
+                    imageView?.animate()?.alpha(1f)?.setDuration(700)?.start()
+                    carouselIndex = next
+                }
+                .start()
+            handler.postDelayed(this, 15_000)
         }
     }
 
@@ -51,20 +74,35 @@ class CozyDream : DreamService() {
         val jobScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = jobScope
         jobScope.launch {
-            BingWallpaperRepository.load(applicationContext)?.let {
-                wallpaperBitmap = it.image
-                imageView?.setImageBitmap(it.image)
+            val preferences = LauncherPreferences(applicationContext)
+            val gallery = BingWallpaperRepository.loadGallery(
+                context = applicationContext,
+                count = 3,
+                startIndex = preferences.wallpaperGalleryStart,
+            )
+            if (gallery.isNotEmpty()) {
+                wallpaperBitmaps = gallery.map { it.image }
+                carouselIndex = 0
+                imageView?.setImageBitmap(wallpaperBitmaps.first())
+                if (wallpaperBitmaps.size > 1) {
+                    handler.postDelayed(carousel, 15_000)
+                }
             }
         }
     }
 
     override fun onDreamingStopped() {
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(carousel)
         scope?.cancel()
         scope = null
+        imageView?.animate()?.cancel()
         imageView?.setImageDrawable(null)
-        wallpaperBitmap?.recycle()
-        wallpaperBitmap = null
+        wallpaperBitmaps.forEach { bitmap ->
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+        wallpaperBitmaps = emptyList()
+        carouselIndex = 0
         imageView = null
         clockView = null
         dateView = null

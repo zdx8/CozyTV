@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -24,39 +25,78 @@ data class BingWallpaper(
 
 object BingWallpaperRepository {
     private const val ARCHIVE_URL = "https://www.bing.com/HPImageArchive.aspx"
-    private const val META_FILE = "bing-meta.txt"
+    private const val GALLERY_META_FILE = "bing-gallery-meta.json"
     private const val IMAGE_PREFIX = "bing-"
 
     suspend fun load(
         context: Context,
         force: Boolean = false,
         archiveIndex: Int = 0,
-    ): BingWallpaper? = withContext(Dispatchers.IO) {
-        val directory = File(context.cacheDir, "bing").apply { mkdirs() }
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        val metaFile = File(directory, META_FILE)
-        val cached = readCached(directory, metaFile)
-        if (!force && cached != null && !cached.stale) return@withContext cached
+    ): BingWallpaper? = loadGallery(
+        context = context,
+        count = 1,
+        force = force,
+        startIndex = archiveIndex,
+    ).firstOrNull()
 
-        runCatching {
-            val metadata = fetchMetadata(archiveIndex.coerceIn(0, 7))
-            val identity = Integer.toHexString(metadata.imageUrl.hashCode())
-            val imageFile = File(directory, "$IMAGE_PREFIX${metadata.date}-$identity.jpg")
-            download(metadata.imageUrl, imageFile)
-            metaFile.writeText(
-                listOf(metadata.date, metadata.title, metadata.copyright, imageFile.name)
-                    .joinToString("\n"),
-                Charsets.UTF_8,
+    suspend fun loadGallery(
+        context: Context,
+        count: Int = 3,
+        force: Boolean = false,
+        startIndex: Int = 0,
+    ): List<BingWallpaper> = withContext(Dispatchers.IO) {
+        val directory = File(context.cacheDir, "bing").apply { mkdirs() }
+        val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        val safeCount = count.coerceIn(1, 3)
+        val stored = readStoredGallery(directory)
+        val cached = decodeStoredGallery(directory, stored)
+        if (!force &&
+            cached.size >= safeCount &&
+            cached.any { it.date == today }
+        ) {
+            return@withContext cached.take(safeCount)
+        }
+
+        val freshEntries = mutableListOf<StoredWallpaper>()
+        val freshWallpapers = mutableListOf<BingWallpaper>()
+        var offset = 0
+        while (freshWallpapers.size < safeCount && offset < 8) {
+            val index = Math.floorMod(startIndex + offset, 8)
+            runCatching {
+                val metadata = fetchMetadata(index)
+                val identity = Integer.toHexString(metadata.imageUrl.hashCode())
+                val imageFile = File(directory, "$IMAGE_PREFIX${metadata.date}-$identity.jpg")
+                if (!imageFile.exists()) download(metadata.imageUrl, imageFile)
+                decodeWallpaper(
+                    file = imageFile,
+                    metadata = metadata,
+                    stale = metadata.date != today,
+                )?.let { wallpaper ->
+                    if (freshWallpapers.none { it.date == wallpaper.date }) {
+                        freshEntries += StoredWallpaper(metadata, imageFile.name)
+                        freshWallpapers += wallpaper
+                    }
+                }
+            }
+            offset += 1
+        }
+
+        if (freshEntries.isNotEmpty()) {
+            writeStoredGallery(
+                directory,
+                (freshEntries + stored).distinctBy { it.metadata.date }.take(16),
             )
             directory.listFiles { entry ->
                 entry.isFile && entry.name.startsWith(IMAGE_PREFIX) && entry.name.endsWith(".jpg")
             }?.sortedByDescending(File::lastModified)
                 ?.drop(16)
                 ?.forEach(File::delete)
-            decodeWallpaper(imageFile, metadata, stale = false)
-        }.getOrElse {
-            cached ?: readLatestCached(directory)
         }
+
+        (freshWallpapers + cached)
+            .distinctBy(BingWallpaper::date)
+            .take(safeCount)
+            .ifEmpty { listOfNotNull(readLatestCached(directory)) }
     }
 
     private data class Metadata(
@@ -64,6 +104,11 @@ object BingWallpaperRepository {
         val title: String,
         val copyright: String,
         val imageUrl: String,
+    )
+
+    private data class StoredWallpaper(
+        val metadata: Metadata,
+        val fileName: String,
     )
 
     private fun fetchMetadata(index: Int): Metadata {
@@ -80,7 +125,7 @@ object BingWallpaperRepository {
             val base = image.getString("urlbase")
             return Metadata(
                 date = image.optString("startdate").ifBlank {
-                    SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                    SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
                 },
                 title = image.optString("title").ifBlank { "Bing 每日精选" },
                 copyright = image.optString("copyright").ifBlank { "Bing Wallpaper" },
@@ -117,19 +162,55 @@ object BingWallpaperRepository {
         }
     }
 
-    private fun readCached(directory: File, metaFile: File): BingWallpaper? {
-        if (!metaFile.exists()) return null
-        val parts = metaFile.readLines(Charsets.UTF_8)
-        if (parts.size < 4) return null
-        val file = File(directory, parts[3])
-        if (!file.exists()) return null
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        val metadata = Metadata(parts[0], parts[1], parts[2], "")
-        return decodeWallpaper(
-            file = file,
-            metadata = metadata,
-            stale = parts[0] != today,
-        )
+    private fun readStoredGallery(directory: File): List<StoredWallpaper> = runCatching {
+        val json = JSONArray(File(directory, GALLERY_META_FILE).readText(Charsets.UTF_8))
+        buildList {
+            for (index in 0 until json.length()) {
+                val item = json.getJSONObject(index)
+                add(
+                    StoredWallpaper(
+                        metadata = Metadata(
+                            date = item.getString("date"),
+                            title = item.getString("title"),
+                            copyright = item.getString("copyright"),
+                            imageUrl = item.optString("imageUrl"),
+                        ),
+                        fileName = item.getString("fileName"),
+                    ),
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    private fun writeStoredGallery(directory: File, entries: List<StoredWallpaper>) {
+        val json = JSONArray()
+        entries.forEach { entry ->
+            json.put(
+                JSONObject()
+                    .put("date", entry.metadata.date)
+                    .put("title", entry.metadata.title)
+                    .put("copyright", entry.metadata.copyright)
+                    .put("imageUrl", entry.metadata.imageUrl)
+                    .put("fileName", entry.fileName),
+            )
+        }
+        File(directory, GALLERY_META_FILE).writeText(json.toString(), Charsets.UTF_8)
+    }
+
+    private fun decodeStoredGallery(
+        directory: File,
+        entries: List<StoredWallpaper>,
+    ): List<BingWallpaper> {
+        val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        return entries.mapNotNull { entry ->
+            val file = File(directory, entry.fileName)
+            if (!file.exists()) return@mapNotNull null
+            decodeWallpaper(
+                file = file,
+                metadata = entry.metadata,
+                stale = entry.metadata.date != today,
+            )
+        }
     }
 
     private fun readLatestCached(directory: File): BingWallpaper? {

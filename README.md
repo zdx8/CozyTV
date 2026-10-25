@@ -15,7 +15,8 @@
 - 首页应用长按 OK 可收藏、隐藏或卸载；全部应用页同样支持这些操作。
 - 首页菜单键保留给电视固件，可正常弹出原厂菜单。
 - 首页 20 秒无按键操作后自动打开 TVLive 全屏直播。
-- Bing 每日 UHD 壁纸；个性化页点击刷新可轮换另一张 Bing 精选。
+- Bing 每日三张 UHD 壁纸缩略图，可选择首页壁纸；屏保每 15 秒自动轮播。
+- 应用图标采用居中的环形标志，不使用额外三角装饰。
 - 控制中心包含网络、系统设置、原厂桌面、音量和亮度。
 - 小米电视通过固件 `TvService` 控制实体背光，其他设备回退到应用遮罩。
 - Home 键无障碍守护只拦截 Home 键；主动进入原厂桌面时不会被自动拉回。
@@ -63,8 +64,8 @@ adb shell settings put secure accessibility_enabled 1
 
 ```bash
 ./gradlew assembleRelease \
-  -PcozytvVersionCode=3 \
-  -PcozytvVersionName=0.3.0
+  -PcozytvVersionCode=7 \
+  -PcozytvVersionName=0.3.4
 ```
 
 更新地址可通过 `-PcozytvUpdateUrl=<GitHub API 或静态清单>` 覆盖。

@@ -11,6 +11,14 @@ class LauncherPreferences(context: Context) {
         }.getOrDefault(WallpaperStyle.Dawn)
         set(value) = prefs.edit().putString(KEY_WALLPAPER, value.name).apply()
 
+    var selectedWallpaperDate: String
+        get() = prefs.getString(KEY_SELECTED_WALLPAPER, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SELECTED_WALLPAPER, value).apply()
+
+    var wallpaperGalleryStart: Int
+        get() = prefs.getInt(KEY_WALLPAPER_GALLERY_START, 0)
+        set(value) = prefs.edit().putInt(KEY_WALLPAPER_GALLERY_START, value).apply()
+
     var showNames: Boolean
         get() = prefs.getBoolean(KEY_SHOW_NAMES, true)
         set(value) = prefs.edit().putBoolean(KEY_SHOW_NAMES, value).apply()
@@ -89,6 +97,8 @@ class LauncherPreferences(context: Context) {
 
     private companion object {
         const val KEY_WALLPAPER = "wallpaper"
+        const val KEY_SELECTED_WALLPAPER = "selected_wallpaper"
+        const val KEY_WALLPAPER_GALLERY_START = "wallpaper_gallery_start"
         const val KEY_SHOW_NAMES = "show_names"
         const val KEY_FAVORITES_GRID = "favorites_grid"
         const val KEY_CLOCK_24 = "clock_24"

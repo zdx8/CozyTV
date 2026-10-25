@@ -1,9 +1,12 @@
 package app.cozytv.ui.screens
 
+import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,16 +23,27 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.cozytv.data.BingWallpaper
 import app.cozytv.ui.LauncherViewModel
 import app.cozytv.ui.components.ActionRow
 import app.cozytv.ui.components.BingBackdrop
@@ -53,6 +67,7 @@ fun SettingsScreen(vm: LauncherViewModel) {
     val restoreStockRequester = remember { FocusRequester() }
     val deviceInfoRequester = remember { FocusRequester() }
     val updateRequester = remember { FocusRequester() }
+    val wallpaperRequesters = remember { List(3) { FocusRequester() } }
 
     LaunchedEffect(Unit) {
         delay(100)
@@ -107,55 +122,46 @@ fun SettingsScreen(vm: LauncherViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(30.dp),
                 ) {
                     Column(Modifier.width(418.dp)) {
-                    SettingsHeading("直播与壁纸", "每天自动更新")
+                    SettingsHeading("壁纸", "三张精选 · 屏保全屏轮播")
                     Spacer(Modifier.height(12.dp))
-                    val wallpaper = vm.bingWallpaper
-                    val image = remember(wallpaper?.image) { wallpaper?.image?.asImageBitmap() }
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.Black.copy(alpha = 0.38f))
-                            .border(
-                                1.dp,
-                                Color.White.copy(alpha = 0.13f),
-                                RoundedCornerShape(16.dp),
-                            ),
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
-                        if (image != null) {
-                            Image(
-                                bitmap = image,
-                                contentDescription = wallpaper?.title,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
+                        val gallery = vm.bingWallpaperGallery.take(3)
+                        if (gallery.isEmpty()) {
+                            repeat(3) {
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .height(88.dp)
+                                        .background(
+                                            Color.White.copy(alpha = 0.06f),
+                                            RoundedCornerShape(13.dp),
+                                        )
+                                        .border(
+                                            1.dp,
+                                            Color.White.copy(alpha = 0.10f),
+                                            RoundedCornerShape(13.dp),
+                                        ),
+                                )
+                            }
                         } else {
-                            BasicText(
-                                "正在获取 Bing 每日壁纸",
-                                style = CozyType.Body,
-                                modifier = Modifier.align(Alignment.Center),
-                            )
-                        }
-                        Column(
-                            Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth()
-                                .background(Color.Black.copy(alpha = 0.48f))
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                        ) {
-                            BasicText(
-                                wallpaper?.title ?: "Bing 每日精选",
-                                style = CozyType.Label,
-                            )
-                            BasicText(
-                                wallpaper?.copyright ?: "联网后自动更新",
-                                style = CozyType.Caption.copy(fontSize = 9.sp),
-                                maxLines = 1,
-                            )
+                            gallery.forEachIndexed { index, wallpaper ->
+                                WallpaperThumbnail(
+                                    wallpaper = wallpaper,
+                                    selected = wallpaper.date == vm.bingWallpaper?.date,
+                                    focusRequester = wallpaperRequesters[index],
+                                    onClick = { vm.selectBingWallpaper(wallpaper) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            repeat(3 - gallery.size) {
+                                Spacer(Modifier.weight(1f).height(88.dp))
+                            }
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(13.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                         ActionRow(
                             title = "直播源",
@@ -170,7 +176,7 @@ fun SettingsScreen(vm: LauncherViewModel) {
                         )
                         ActionRow(
                             title = "屏保设置",
-                            detail = "使用同一张壁纸",
+                            detail = "三张壁纸自动轮播",
                             focusRequester = dreamRequester,
                             onClick = vm::openScreensaverSettings,
                             modifier = Modifier.weight(1f),
@@ -178,8 +184,8 @@ fun SettingsScreen(vm: LauncherViewModel) {
                     }
                     Spacer(Modifier.height(9.dp))
                     ActionRow(
-                        title = "刷新 Bing 壁纸",
-                        detail = "切换到另一张 Bing UHD 精选",
+                        title = "换一组 Bing 壁纸",
+                        detail = "加载另外三张 Bing UHD 精选",
                         focusRequester = refreshBingRequester,
                         onClick = vm::rotateBingWallpaper,
                     )
@@ -299,5 +305,88 @@ private fun SettingsHeading(title: String, subtitle: String) {
             style = CozyType.Caption,
             modifier = Modifier.padding(bottom = 2.dp),
         )
+    }
+}
+
+@Composable
+private fun WallpaperThumbnail(
+    wallpaper: BingWallpaper,
+    selected: Boolean,
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val image = remember(wallpaper.image) { wallpaper.image.asImageBitmap() }
+    Box(
+        modifier
+            .height(88.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                val select = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                    event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER
+                if (select && event.type == KeyEventType.KeyUp) {
+                    onClick()
+                    true
+                } else {
+                    select
+                }
+            }
+            .focusable()
+            .pointerInput(wallpaper.date) {
+                detectTapGestures(
+                    onTap = {
+                        focusRequester.requestFocus()
+                        onClick()
+                    },
+                )
+            }
+            .clip(RoundedCornerShape(13.dp))
+            .background(Color.Black.copy(alpha = 0.32f))
+            .border(
+                if (focused) 2.dp else 1.dp,
+                if (focused) Color.White
+                else if (selected) Color(0xFF8B9CFF)
+                else Color.White.copy(alpha = 0.13f),
+                RoundedCornerShape(13.dp),
+            ),
+    ) {
+        Image(
+            bitmap = image,
+            contentDescription = wallpaper.title,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
+                    ),
+                ),
+        )
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 7.dp),
+        ) {
+            BasicText(
+                wallpaper.title,
+                style = CozyType.Caption.copy(fontSize = 8.sp),
+                maxLines = 1,
+            )
+            if (selected) {
+                BasicText(
+                    "使用中",
+                    style = CozyType.Caption.copy(
+                        fontSize = 7.sp,
+                        color = Color(0xFFB9C4FF),
+                    ),
+                )
+            }
+        }
     }
 }

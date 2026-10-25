@@ -74,7 +74,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val prefs = LauncherPreferences(application)
     private var loadJob: Job? = null
     private var wallpaperJob: Job? = null
-    private var wallpaperRotationIndex = 0
+    private var wallpaperGalleryStart = prefs.wallpaperGalleryStart
     private var weatherJob: Job? = null
     private var liveJob: Job? = null
     private var liveRetryJob: Job? = null
@@ -93,6 +93,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     var defaultSourceId by mutableStateOf(prefs.defaultSourceId)
         private set
     var bingWallpaper by mutableStateOf<BingWallpaper?>(null)
+        private set
+    var bingWallpaperGallery by mutableStateOf<List<BingWallpaper>>(emptyList())
         private set
     var weather by mutableStateOf<WeatherInfo?>(null)
         private set
@@ -190,36 +192,55 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 brightnessHardware = true
             }
         }
-        refreshBingWallpaper()
+        refreshBingWallpapers()
         refreshWeather(force = true)
         refreshLiveSource()
         refresh()
         viewModelScope.launch {
             while (true) {
                 delay(30 * 60 * 1000L)
-                refreshBingWallpaper()
+                refreshBingWallpapers()
                 refreshWeather()
             }
         }
     }
 
     fun refreshDailyContent() {
-        refreshBingWallpaper()
+        refreshBingWallpapers()
         refreshWeather()
     }
 
-    fun refreshBingWallpaper(force: Boolean = false, archiveIndex: Int = 0) {
+    fun refreshBingWallpapers(force: Boolean = false) {
         wallpaperJob?.cancel()
         wallpaperJob = viewModelScope.launch {
-            BingWallpaperRepository.load(getApplication(), force, archiveIndex)?.let {
-                bingWallpaper = it
+            val gallery = BingWallpaperRepository.loadGallery(
+                context = getApplication(),
+                count = 3,
+                force = force,
+                startIndex = wallpaperGalleryStart,
+            )
+            if (gallery.isNotEmpty()) {
+                bingWallpaperGallery = gallery
+                val selected = gallery.firstOrNull {
+                    it.date == prefs.selectedWallpaperDate
+                } ?: gallery.first()
+                bingWallpaper = selected
+                if (selected.date.isNotBlank()) {
+                    prefs.selectedWallpaperDate = selected.date
+                }
             }
         }
     }
 
     fun rotateBingWallpaper() {
-        wallpaperRotationIndex = (wallpaperRotationIndex + 1) % 8
-        refreshBingWallpaper(force = true, archiveIndex = wallpaperRotationIndex)
+        wallpaperGalleryStart = (wallpaperGalleryStart + 3) % 8
+        prefs.wallpaperGalleryStart = wallpaperGalleryStart
+        refreshBingWallpapers(force = true)
+    }
+
+    fun selectBingWallpaper(wallpaper: BingWallpaper) {
+        bingWallpaper = wallpaper
+        prefs.selectedWallpaperDate = wallpaper.date
     }
 
     fun refreshWeather(force: Boolean = false) {
