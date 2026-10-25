@@ -309,7 +309,6 @@ fun HomeScreen(vm: LauncherViewModel) {
                 }
                 Spacer(Modifier.weight(1f))
                 AllAppsTile(
-                    count = vm.apps.size,
                     focusRequester = appsRequester,
                     onClick = vm::showApps,
                 )
@@ -423,7 +422,6 @@ private fun HomeTopBar(
 
 @Composable
 private fun AllAppsTile(
-    count: Int,
     focusRequester: FocusRequester,
     onClick: () -> Unit,
 ) {
@@ -471,24 +469,13 @@ private fun AllAppsTile(
         ) {
             AppGridIcon()
             Spacer(Modifier.height(3.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicText(
-                    "全部应用",
-                    style = CozyType.Caption.copy(
-                        fontSize = 10.sp,
-                        color = if (focused) CozyColors.Ink else Color.White,
-                    ),
-                )
-                Spacer(Modifier.width(4.dp))
-                BasicText(
-                    count.toString(),
-                    style = CozyType.Caption.copy(
-                        fontSize = 8.sp,
-                        color = if (focused) CozyColors.Ink.copy(alpha = 0.6f)
-                        else Color.White.copy(alpha = 0.55f),
-                    ),
-                )
-            }
+            BasicText(
+                "全部应用",
+                style = CozyType.Caption.copy(
+                    fontSize = 10.sp,
+                    color = if (focused) CozyColors.Ink else Color.White,
+                ),
+            )
         }
     }
 }
