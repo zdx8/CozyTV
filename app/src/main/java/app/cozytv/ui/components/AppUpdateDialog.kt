@@ -313,7 +313,7 @@ private fun title(state: AppUpdateState): String = when (state) {
     is AppUpdateState.Available -> "发现新版本 ${state.info.versionName}"
     is AppUpdateState.Downloading -> "正在下载更新"
     is AppUpdateState.Ready -> if (state.permissionRequired) "需要安装权限" else "安装包已就绪"
-    is AppUpdateState.Failed -> "检查更新失败"
+    is AppUpdateState.Failed -> "更新失败"
 }
 
 private fun subtitle(state: AppUpdateState): String = when (state) {

@@ -34,6 +34,7 @@ private const val UPDATE_APK_NAME = "cozytv-update.apk"
 data class UpdateInfo(
     val versionName: String,
     val downloadUrl: String,
+    val apiDownloadUrl: String? = null,
     val sizeBytes: Long,
     val notes: String,
     val sha256: String?,
@@ -86,69 +87,91 @@ object AppUpdater {
         if (target.exists() && !target.delete()) {
             throw IOException("无法清理旧的更新包")
         }
-        try {
-            val connection = openConnection(info.downloadUrl).apply {
-                setRequestProperty("Accept", "application/octet-stream")
-                setRequestProperty("User-Agent", "CozyTV/${BuildConfig.VERSION_NAME}")
-            }
+        val candidates = listOfNotNull(info.apiDownloadUrl, info.downloadUrl)
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+        var lastError: Throwable? = null
+        for (url in candidates) {
             try {
-                if (connection.responseCode !in 200..299) {
-                    throw IOException("下载服务器返回 HTTP ${connection.responseCode}")
-                }
-                val declaredSize = connection.contentLength.toLong().takeIf { it > 0 }
-                    ?: info.sizeBytes.takeIf { it > 0 }
-                    ?: 0L
-                if (declaredSize > MAX_APK_BYTES) {
-                    throw IOException("更新包大小异常")
-                }
+                downloadFrom(context, info, url, target, onProgress)
+                return@withContext target
+            } catch (cancelled: CancellationException) {
+                target.delete()
+                throw cancelled
+            } catch (error: Throwable) {
+                target.delete()
+                lastError = error
+                Log.w(TAG, "Update download failed from ${safeHost(url)}", error)
+            }
+        }
+        throw lastError ?: IOException("没有可用的更新下载地址")
+    }
 
-                val digest = MessageDigest.getInstance("SHA-256")
-                var downloaded = 0L
-                var lastPercent = -1
-                onProgress(0)
-                connection.inputStream.use { input ->
-                    target.outputStream().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        while (true) {
-                            coroutineContext.ensureActive()
-                            val read = input.read(buffer)
-                            if (read <= 0) break
-                            downloaded += read
-                            if (downloaded > MAX_APK_BYTES) {
-                                throw IOException("更新包超过大小限制")
-                            }
-                            output.write(buffer, 0, read)
-                            digest.update(buffer, 0, read)
-                            if (declaredSize > 0) {
-                                val percent = (downloaded * 100 / declaredSize)
-                                    .toInt()
-                                    .coerceIn(0, 100)
-                                if (percent != lastPercent) {
-                                    lastPercent = percent
-                                    onProgress(percent)
-                                }
+    private suspend fun downloadFrom(
+        context: Context,
+        info: UpdateInfo,
+        url: String,
+        target: File,
+        onProgress: suspend (Int) -> Unit,
+    ) {
+        val connection = openConnection(url).apply {
+            setRequestProperty("Accept", "application/octet-stream")
+            setRequestProperty("User-Agent", "CozyTV/${BuildConfig.VERSION_NAME}")
+        }
+        try {
+            if (connection.responseCode !in 200..299) {
+                throw IOException("下载服务器返回 HTTP ${connection.responseCode}")
+            }
+            val declaredSize = connection.contentLength.toLong().takeIf { it > 0 }
+                ?: info.sizeBytes.takeIf { it > 0 }
+                ?: 0L
+            if (declaredSize > MAX_APK_BYTES) {
+                throw IOException("更新包大小异常")
+            }
+
+            val digest = MessageDigest.getInstance("SHA-256")
+            var downloaded = 0L
+            var lastPercent = -1
+            onProgress(0)
+            connection.inputStream.use { input ->
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        coroutineContext.ensureActive()
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        downloaded += read
+                        if (downloaded > MAX_APK_BYTES) {
+                            throw IOException("更新包超过大小限制")
+                        }
+                        output.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
+                        if (declaredSize > 0) {
+                            val percent = (downloaded * 100 / declaredSize)
+                                .toInt()
+                                .coerceIn(0, 100)
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                onProgress(percent)
                             }
                         }
                     }
                 }
-                if (downloaded == 0L) throw IOException("下载到的更新包为空")
-                onProgress(100)
-
-                val expected = info.sha256?.lowercase()
-                if (!expected.isNullOrBlank()) {
-                    val actual = digest.digest().joinToString("") { "%02x".format(it) }
-                    if (actual != expected) {
-                        throw IOException("更新包校验失败")
-                    }
-                }
-                validateApk(context, target, info)
-                target
-            } finally {
-                connection.disconnect()
             }
-        } catch (error: Throwable) {
-            target.delete()
-            throw error
+            if (downloaded == 0L) throw IOException("下载到的更新包为空")
+            onProgress(100)
+
+            val expected = info.sha256?.lowercase()
+            if (!expected.isNullOrBlank()) {
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                if (actual != expected) {
+                    throw IOException("更新包校验失败")
+                }
+            }
+            validateApk(context, target, info)
+        } finally {
+            connection.disconnect()
         }
     }
 
@@ -262,6 +285,7 @@ object AppUpdater {
             return UpdateInfo(
                 versionName = version,
                 downloadUrl = asset.optString("browser_download_url"),
+                apiDownloadUrl = asset.optString("url").takeIf(::isGitHubAssetApiUrl),
                 sizeBytes = asset.optLong("size", 0L),
                 notes = json.optString("body").trim(),
                 sha256 = digest,
@@ -348,6 +372,13 @@ object AppUpdater {
 
     private fun isAllowedDownloadUrl(url: String): Boolean =
         url.startsWith("https://") || (BuildConfig.DEBUG && url.startsWith("http://"))
+
+    private fun isGitHubAssetApiUrl(url: String): Boolean =
+        url.startsWith("https://api.github.com/repos/") &&
+            "/releases/assets/" in url
+
+    private fun safeHost(url: String): String =
+        runCatching { URL(url).host }.getOrDefault("update server")
 
     private fun readLimited(reader: java.io.Reader, maxBytes: Int): String {
         val result = StringBuilder()
