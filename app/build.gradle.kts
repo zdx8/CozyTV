@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 val updateManifestUrl = providers.gradleProperty("cozytvUpdateUrl")
     .orElse(providers.environmentVariable("COZYTV_UPDATE_URL"))
@@ -31,8 +32,8 @@ android {
         applicationId = "app.cozytv"
         minSdk = 23
         targetSdk = 36
-        versionCode = versionCodeOverride ?: 8
-        versionName = versionNameOverride ?: "0.3.5"
+        versionCode = versionCodeOverride ?: 9
+        versionName = versionNameOverride ?: "0.4.0"
         buildConfigField(
             "String",
             "UPDATE_MANIFEST_URL",
@@ -45,6 +46,34 @@ android {
         )
     }
 
+    // Release signing credentials come from `keystore.properties` in the
+    // repository root (gitignored, see keystore.properties.example).
+    // If the file is missing the build still works — the release APK is
+    // simply left unsigned, which tools/release.sh refuses to publish.
+    signingConfigs {
+        create("release") {
+            val keystoreProps = Properties().apply {
+                val f = rootProject.file("keystore.properties")
+                if (f.exists()) f.inputStream().use { load(it) }
+            }
+            if (keystoreProps.isNotEmpty()) {
+                // `storeFile` is written by hand, so a bare relative path
+                // is ambiguous: Gradle resolves it against this module,
+                // people write it relative to the repository root. Try
+                // both and fall back to the module-relative one so the
+                // error message still names a concrete file.
+                val rawStoreFile = keystoreProps.getProperty("storeFile")?.trim()
+                if (!rawStoreFile.isNullOrEmpty()) {
+                    val candidates = listOf(file(rawStoreFile), rootProject.file(rawStoreFile))
+                    storeFile = candidates.firstOrNull { it.exists() } ?: candidates.first()
+                }
+                storePassword = keystoreProps.getProperty("storePassword", "")
+                keyAlias = keystoreProps.getProperty("keyAlias", "cozytv-release")
+                keyPassword = keystoreProps.getProperty("keyPassword", "")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -53,6 +82,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Sign with the real release key when keystore.properties is
+            // present. Without it the build still succeeds but produces
+            // an unsigned APK — the release script refuses to publish
+            // an unsigned one.
+            if (signingConfigs.findByName("release")?.storeFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

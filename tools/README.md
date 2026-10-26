@@ -1,5 +1,32 @@
 # CozyTV companion tools
 
+## Release
+
+`release.sh` builds, signs, verifies and publishes a release:
+
+```bash
+tools/release.sh 0.4.0              # build + sign + verify + dist/
+tools/release.sh 0.4.0 --publish    # tag + push + GitHub Release
+```
+
+It bumps the version defaults in `app/build.gradle.kts`, refuses to publish an
+unsigned or debug-signed APK, and writes `dist/CozyTV-vX.Y.Z-release.apk` plus
+a `.sha256` file.
+
+Signing uses `keystore.properties` in the repository root (gitignored) and the
+keystore at `app/signing/cozytv-release.keystore` — see
+`keystore.properties.example`. The script refuses to run without them.
+
+## On-device smoke test
+
+`test-on-device.sh` installs the APK, launches CozyTV, captures logcat and
+checks six scenarios (startup, home screen, live preview, embedded TVLive,
+backlight bridge, HOME resolution):
+
+```bash
+TV_HOST=<TV_IP>:5555 tools/test-on-device.sh
+```
+
 ## HOME diagnostics
 
 `home_status.sh` is read-only. It prints the current default HOME and every enabled HOME activity;

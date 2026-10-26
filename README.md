@@ -71,6 +71,31 @@ adb shell settings put secure accessibility_enabled 1
 
 更新地址可通过 `-PcozytvUpdateUrl=<GitHub API 或静态清单>` 覆盖。
 
+### 从 v0.4.0 起：正式签名
+
+v0.3.x 的 Release 是用本机 Android debug key 手工签名的（发布身份不是
+`CN=CozyTV`）。从 **v0.4.0** 起改用正式密钥：
+
+- 签名者：`CN=CozyTV, OU=zdx8, O=zdx8, L=Beijing, ST=Beijing, C=CN`
+- 证书 SHA-256：`0a46b303962959c8b85df33b25c31c1d5ecfd21d4ba6cf5a36ae093d6128a04b`
+- 密钥库：`app/signing/cozytv-release.keystore`（**不入库**，见
+  `keystore.properties.example`）
+
+**升级影响**：签名变了，Android 不允许覆盖安装。旧版用户必须先卸载
+`app.cozytv` 再装新版，桌面布局与收藏会重置。应用内的自更新在检测到
+签名不一致时也会提示先卸载旧版。
+
+### 发布
+
+```bash
+tools/release.sh 0.4.0              # 构建 + 签名 + 校验签名 + 产出 dist/
+tools/release.sh 0.4.0 --publish    # 再打 tag、推送、建 GitHub Release
+```
+
+脚本会自己升 `app/build.gradle.kts` 里的版本号、校验签名（**拒绝**
+未签名或 debug 签名的产物）、把 APK 放到 `dist/` 并生成 `.sha256`。
+`--publish` 之前会要求确认。
+
 ## 构建
 
 需要 JDK 17 和 Android SDK 36。
@@ -82,7 +107,14 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n app.cozytv/.MainActivity
 ```
 
-Release APK：`app/build/outputs/apk/release/app-release-unsigned.apk`。
+Release APK：`app/build/outputs/apk/release/app-release.apk`
+（配置了 `keystore.properties` 时为已签名产物），发布产物在 `dist/`。
+
+真机冒烟测试：
+
+```bash
+TV_HOST=<TV_IP>:5555 tools/test-on-device.sh
+```
 
 ## 验证
 
@@ -98,6 +130,11 @@ Release APK：`app/build/outputs/apk/release/app-release-unsigned.apk`。
 - 从个性化、全部应用等内部页面按 Home 均会回到 CozyTV 首页
 - 全部应用、设备信息和更新流程
 - Debug、Release、单元测试与 Android Lint
+
+2026-10-27 修复了 20 类缺陷（播放重连失效、缓冲态暂停失效、切台后不播、
+GBK 订阅乱码、更新校验误判等），新增 10 个回归单测，详见
+[`HANDOVER.md`](HANDOVER.md)。修复后共 19 个单元测试全绿，
+app 与 `:tvlive` 两个模块的 Lint 均为 0 error。
 
 TVLive 为 Apache-2.0；Aerial TV 与 CleanYourTV 为 MIT。来源说明见
 [`docs/REFERENCE_NOTES.md`](docs/REFERENCE_NOTES.md)。

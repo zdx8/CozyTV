@@ -2,6 +2,9 @@
 set -euo pipefail
 
 # Read-only HOME diagnostics. CozyTV never disables the stock launcher.
+#
+# The TV's address changes with DHCP — pass it explicitly:
+#   TV_HOST=<TV_IP>:5555 tools/home_status.sh
 TV_HOST="${TV_HOST:-<TV_IP>:5555}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="${ADB:-$ANDROID_HOME/platform-tools/adb}"

@@ -454,7 +454,11 @@ object AppUpdater {
             throw IOException("更新包版本号未高于当前版本")
         }
         if (!hasSameSigner(context, manager, apk)) {
-            throw IOException("更新包签名与当前安装版本不一致")
+            // The message has to name the fix: since v0.4.0 the release
+            // uses a real signing key instead of the local Android debug
+            // key, and an install signed with the old key cannot be
+            // updated in place — the user has to uninstall it once.
+            throw IOException("更新包签名与当前安装版本不一致，请先卸载旧版再安装")
         }
     }
 

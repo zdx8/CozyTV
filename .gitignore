@@ -9,3 +9,13 @@ local.properties
 *.hprof
 .DS_Store
 
+# Release artifacts produced by tools/release.sh
+dist/
+
+# Release keystore + credentials — must NEVER be committed.
+# Use `keystore.properties.example` as the template and copy it to
+# `keystore.properties` on the local machine.
+app/signing/*.keystore
+app/signing/*.jks
+keystore.properties
+
