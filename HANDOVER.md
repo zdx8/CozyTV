@@ -9,8 +9,8 @@
 
 CozyTV 是一个面向 Android TV / Google TV 的**第三方桌面**（Kotlin + Jetpack Compose +
 Media3），把电视的首页换成直播预览 + Apple TV 风格磁贴墙，并内置完整 TVLive 直播客户端；
-当前状态 **v0.4.0 已构建、已签名、可安装**，20 类缺陷已修复并补了 10 个回归单测，
-**尚未推送 GitHub、尚未发布 v0.4.0，也尚未在真机上跑过修复后的版本**。
+当前状态 **v0.4.0 已发布（GitHub Releases，2026-10-27）**，20 类缺陷已修复并补了 10 个
+回归单测，发布包用正式密钥签名；**修复后的版本尚未在真机上跑过**（见第 5 节）。
 使用场景：把闲置的安卓电视/盒子变成能看 IPTV 的桌面（作者自用，README 里的设备是
 MiTV-ASTP0，Android 9 / 1920×1080）。
 
@@ -18,14 +18,18 @@ MiTV-ASTP0，Android 9 / 1920×1080）。
 
 | 交付物 | 路径 | 版本 | 校验 |
 |---|---|---|---|
-| 安装包（已签名） | `dist/CozyTV-v0.4.0-release.apk` | v0.4.0 (versionCode 9) | SHA-256 `f3be5df9dc7fe00d15bfe68c9cd5efc0d959e0958975f0aa375fb78611d94d11`，3,584,625 字节 |
+| 安装包（已签名，已发布） | `dist/CozyTV-v0.4.0-release.apk` | v0.4.0 (versionCode 9) | SHA-256 `ad98c12542d4cd6a11c569928f794aa66d4ccc09ab74314b6f005ab5d260088a`，3,584,636 字节（与线上资产 digest 一致） |
 | 摘要文件 | `dist/CozyTV-v0.4.0-release.apk.sha256` | — | 同上 |
 | 签名证书 | `app/signing/cozytv-release.keystore`（不入库） | — | 证书 SHA-256 `0a46b303962959c8b85df33b25c31c1d5ecfd21d4ba6cf5a36ae093d6128a04b`，DN `CN=CozyTV, OU=zdx8, O=zdx8, L=Beijing, ST=Beijing, C=CN` |
 | 源码 | GitHub `zdx8/CozyTV`（`main`）· Gitea `ssh://gitea/ZYG/CozyTV.git` | 本地 HEAD `1be6384` + 1 个未推送提交 | — |
-| 已发布的线上版本 | GitHub Releases v0.3.0 – v0.3.5 | v0.3.5（2026-10-26 发布，4 次下载） | 资产 `CozyTV-v0.3.5-release.apk` SHA-256 `c1a4cd27aabe1f2c9ccf05d61a041f91abefb823b78274f984d124327103c99a`，3,579,097 字节 |
+| 已发布的线上版本 | GitHub Releases v0.3.0 – **v0.4.0** | **v0.4.0**（2026-10-27 发布）<br>v0.3.5（2026-10-26，4 次下载） | v0.4.0 资产 `CozyTV-v0.4.0-release.apk` SHA-256 `ad98c125…` 3,584,636 字节<br>v0.3.5 资产 SHA-256 `c1a4cd27…` 3,579,097 字节 |
 
-**已对外发布**：有，GitHub Releases 共 6 个（v0.3.0 起）。
+**已对外发布**：有，GitHub Releases 共 **7 个**（v0.3.0 – v0.4.0）；tag 与 main 已同时推到
+GitHub (`origin`) 与 Gitea (`gitea`)。
 **官网**：无（CozyTV 没有 GitHub Pages，同作者的 TVLive 有 `zdx8.github.io/TVLive/`）。
+**注意（复核用）**：APK **不是字节可复现的** —— 重新构建会因 R8 映射、zip 条目时间戳与
+签名时间产生不同字节。因此本地重建后的 SHA-256 会与线上不同，属正常；
+要核对线上文件请用 `gh release view v0.4.0 --json assets` 里的 `digest`。
 **注意**：v0.3.x 的线上包是用**本机 Android debug key** 手工签名的（DN `CN=Android
 Debug`，证书 SHA-256 `b285093b…`），v0.4.0 起改为上面的正式密钥 —— 见第 5 节「阻断」。
 
@@ -124,7 +128,6 @@ CozyTV/
 
 ### 未完成
 
-- **v0.4.0 尚未推送 GitHub / 尚未发布 Release**（本地已构建出签名包，等用户点头）。
 - **修复后的版本尚未在真机验证**：电视在 `<TV_IP>`（ADB 网络调试），但
   2026-10-27 本机已在 `192.168.2.x` 网段（路由器/网络变更），到 `192.168.0.x` 无路由，
   `ping` 与 `adb connect` 均不通；`192.168.2.x` 邻居里也没有 5555/5554 开放的设备。
@@ -250,9 +253,11 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
    → `DN: CN=CozyTV, OU=zdx8, O=zdx8, L=Beijing, ST=Beijing, C=CN`，
    `SHA-256 digest: 0a46b303962959c8b85df33b25c31c1d5ecfd21d4ba6cf5a36ae093d6128a04b`。
 6. **发布脚本**：`GRADLE_FLAGS="--offline" tools/release.sh 0.4.0`
-   → 打印 `version 0.4.0 (code 9)`、证书指纹、产物路径与
-   `sha256 f3be5df9dc7fe00d15bfe68c9cd5efc0d959e0958975f0aa375fb78611d94d11`、
-   `size 3584625 bytes`，末尾提示 `build only — nothing was pushed`。
+   → 打印 `version 0.4.0 (code 9)`、证书指纹 `0a46b303…`、产物路径、
+   `sha256 <本次构建的值>`、`size 3584636 bytes`（字节数与线上相同，哈希会因
+   构建时间戳不同而不同），末尾提示 `build only — nothing was pushed`。
+   线上基准：`gh release view v0.4.0 -R zdx8/CozyTV --json assets` →
+   `digest: sha256:ad98c12542d4cd6a11c569928f794aa66d4ccc09ab74314b6f005ab5d260088a`。
 7. **未签名保护**：`mv keystore.properties /tmp/kp && GRADLE_FLAGS="--offline" tools/release.sh 0.4.0`
    → 脚本在 preflight 阶段直接 `✗ keystore.properties missing`（不会产出无签名包）；
    跑完记得 `mv /tmp/kp keystore.properties`。
@@ -284,7 +289,7 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 |---|---|---|
 | 2026-10-25 | 0.3.0–0.3.4 | 首次成型：桌面、磁贴墙、控制中心、内嵌 TVLive、信号源、个性化 |
 | 2026-10-26 | 0.3.5 | 控制中心只读显示音量与亮度、开机自启、README 与截图更新 |
-| 2026-10-27 | 0.4.0（未发布） | **修复 20 类缺陷**：播放重连失效、缓冲态暂停失效、切台不播、GBK 订阅乱码、订阅 URL 解析崩溃、Android 6 `contentLengthLong` 崩溃、更新校验误判/漏判、首页预览无法恢复、直播源不同步、焦点跳回首项、提示被吞、OOM 与越界风险等；**新增正式签名 + 发布脚本 + 真机测试脚本 + 10 个回归单测** |
+| 2026-10-27 | 0.4.0（**已发布**） | **修复 20 类缺陷**：播放重连失效、缓冲态暂停失效、切台不播、GBK 订阅乱码、订阅 URL 解析崩溃、Android 6 `contentLengthLong` 崩溃、更新校验误判/漏判、首页预览无法恢复、直播源不同步、焦点跳回首项、提示被吞、OOM 与越界风险等；**新增正式签名 + 发布脚本 + 真机测试脚本 + 10 个回归单测**；同日经 `tools/release.sh 0.4.0 --publish` 发布到 GitHub Releases（tag `v0.4.0`，main 与 tag 同步到 GitHub 与 Gitea），资产 SHA-256 `ad98c125…` |
 
 ---
 

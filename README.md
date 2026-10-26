@@ -116,6 +116,15 @@ Release APK：`app/build/outputs/apk/release/app-release.apk`
 TV_HOST=<TV_IP>:5555 tools/test-on-device.sh
 ```
 
+### 当前版本
+
+- 最新发布：**v0.4.0**（2026-10-27）—— <https://github.com/zdx8/CozyTV/releases/tag/v0.4.0>
+- 资产 `CozyTV-v0.4.0-release.apk`，3,584,636 字节，
+  SHA-256 `ad98c12542d4cd6a11c569928f794aa66d4ccc09ab74314b6f005ab5d260088a`
+- 签名：`CN=CozyTV, OU=zdx8, O=zdx8, L=Beijing, ST=Beijing, C=CN`，
+  证书 SHA-256 `0a46b303962959c8b85df33b25c31c1d5ecfd21d4ba6cf5a36ae093d6128a04b`
+- 校验线上文件：`gh release view v0.4.0 -R zdx8/CozyTV --json assets`
+
 ## 验证
 
 已在 MiTV-ASTP0（Android 9，1920×1080）和 Android TV API 33 模拟器验证：
