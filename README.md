@@ -17,7 +17,7 @@
 - 首页 20 秒无按键操作后自动打开 TVLive 全屏直播。
 - Bing 每日三张 UHD 壁纸缩略图，可选择首页壁纸；屏保每 15 秒自动轮播。
 - 应用图标采用居中的环形标志，不使用额外三角装饰。
-- 控制中心包含网络、系统设置、原厂桌面、音量和亮度。
+- 控制中心包含网络、系统设置和原厂桌面，并只读显示系统音量与亮度。
 - 小米电视通过固件 `TvService` 控制实体背光，其他设备回退到应用遮罩。
 - Home 键无障碍守护只拦截 Home 键；主动进入原厂桌面时不会被自动拉回。
 - 电视开机完成后自动进入 CozyTV，不主动打开原厂桌面。
@@ -65,8 +65,8 @@ adb shell settings put secure accessibility_enabled 1
 
 ```bash
 ./gradlew assembleRelease \
-  -PcozytvVersionCode=7 \
-  -PcozytvVersionName=0.3.4
+  -PcozytvVersionCode=8 \
+  -PcozytvVersionName=0.3.5
 ```
 
 更新地址可通过 `-PcozytvUpdateUrl=<GitHub API 或静态清单>` 覆盖。
@@ -92,6 +92,8 @@ Release APK：`app/build/outputs/apk/release/app-release-unsigned.apk`。
 - 控制中心、实体背光 100→95→100
 - Home 键守护与原厂桌面入口
 - 首页菜单键透传与 20 秒无操作自动进入 TVLive
+- 开机自动进入 CozyTV
+- 控制中心只读显示系统音量与亮度
 - TVLive 首页播放及 HDMI / AV / 电视输入全屏切换
 - 从个性化、全部应用等内部页面按 Home 均会回到 CozyTV 首页
 - 全部应用、设备信息和更新流程
