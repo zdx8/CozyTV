@@ -23,8 +23,8 @@ object XiaomiBrightness {
             Log.w(TAG, "MiTV panel path unavailable (model=${android.os.Build.MODEL})")
             return null
         }
-        val value = lastLevel
-            ?: runCatching { MitvPanel.level(context) }.getOrNull()
+        val value = runCatching { MitvPanel.level(context) }.getOrNull()
+            ?: lastLevel
             ?: stored(context)
             ?: 50
         lastLevel = value.coerceIn(1, 100)

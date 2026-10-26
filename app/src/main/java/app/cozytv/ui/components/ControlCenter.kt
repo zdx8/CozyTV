@@ -87,6 +87,13 @@ fun ControlCenter(vm: LauncherViewModel) {
             delay(30_000)
         }
     }
+    LaunchedEffect(audio) {
+        while (true) {
+            volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            vm.refreshSystemBrightness()
+            delay(1_000)
+        }
+    }
     val time = remember(now, vm.clock24Hour) {
         SimpleDateFormat(
             if (vm.clock24Hour) "HH:mm" else "h:mm",
@@ -99,26 +106,12 @@ fun ControlCenter(vm: LauncherViewModel) {
     val sourceRequester = remember { FocusRequester() }
     val networkRequester = remember { FocusRequester() }
     val settingsRequester = remember { FocusRequester() }
-    val volumeRequester = remember { FocusRequester() }
-    val brightnessRequester = remember { FocusRequester() }
     val personalizeRequester = remember { FocusRequester() }
     val desktopRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         delay(100)
         runCatching { sourceRequester.requestFocus() }
-    }
-
-    fun changeVolume(delta: Int) {
-        val next = (volume + delta).coerceIn(0, volumeMax)
-        if (next != volume) {
-            volume = next
-            audio.setStreamVolume(
-                AudioManager.STREAM_MUSIC,
-                next,
-                AudioManager.FLAG_SHOW_UI,
-            )
-        }
     }
 
     fun openNetwork() {
@@ -211,7 +204,7 @@ fun ControlCenter(vm: LauncherViewModel) {
                     modifier = Modifier.weight(1f),
                     onLeft = { desktopRequester.requestFocus() },
                     onRight = { networkRequester.requestFocus() },
-                    onDown = { volumeRequester.requestFocus() },
+                    onDown = { personalizeRequester.requestFocus() },
                     onClick = {
                         vm.closeControlCenter()
                         vm.showInputs()
@@ -225,7 +218,7 @@ fun ControlCenter(vm: LauncherViewModel) {
                     modifier = Modifier.weight(1f),
                     onLeft = { sourceRequester.requestFocus() },
                     onRight = { settingsRequester.requestFocus() },
-                    onDown = { volumeRequester.requestFocus() },
+                    onDown = { personalizeRequester.requestFocus() },
                     onClick = { openNetwork() },
                 )
                 CircleAction(
@@ -236,7 +229,7 @@ fun ControlCenter(vm: LauncherViewModel) {
                     modifier = Modifier.weight(1f),
                     onLeft = { networkRequester.requestFocus() },
                     onRight = { desktopRequester.requestFocus() },
-                    onDown = { volumeRequester.requestFocus() },
+                    onDown = { personalizeRequester.requestFocus() },
                     onClick = {
                         vm.closeControlCenter()
                         vm.openSystemSettings()
@@ -250,7 +243,7 @@ fun ControlCenter(vm: LauncherViewModel) {
                     modifier = Modifier.weight(1f),
                     onLeft = { settingsRequester.requestFocus() },
                     onRight = { sourceRequester.requestFocus() },
-                    onDown = { volumeRequester.requestFocus() },
+                    onDown = { personalizeRequester.requestFocus() },
                     onClick = {
                         vm.closeControlCenter()
                         vm.openStockDesktop()
@@ -258,29 +251,23 @@ fun ControlCenter(vm: LauncherViewModel) {
                 )
             }
             Spacer(Modifier.height(16.dp))
-            ControlSlider(
+            SystemStatusRow(
                 iconRes = R.drawable.ic_cc_volume,
                 tint = Color(0xFF3ED6C4),
+                label = "音量",
                 percent = volumePercent,
-                focusRequester = volumeRequester,
-                onAdjust = { changeVolume(it) },
-                onUp = { desktopRequester.requestFocus() },
-                onDown = { brightnessRequester.requestFocus() },
             )
             Spacer(Modifier.height(10.dp))
-            ControlSlider(
+            SystemStatusRow(
                 iconRes = R.drawable.ic_cc_brightness,
                 tint = Color(0xFFFFC45C),
+                label = "亮度",
                 percent = brightnessPercent,
-                focusRequester = brightnessRequester,
-                onAdjust = vm::adjustBrightness,
-                onUp = { volumeRequester.requestFocus() },
-                onDown = { personalizeRequester.requestFocus() },
             )
             Spacer(Modifier.height(14.dp))
             PersonalizeRow(
                 focusRequester = personalizeRequester,
-                onUp = { brightnessRequester.requestFocus() },
+                onUp = { desktopRequester.requestFocus() },
                 onClick = {
                     vm.closeControlCenter()
                     vm.showSettings()
@@ -437,56 +424,20 @@ private fun CircleAction(
 }
 
 @Composable
-private fun ControlSlider(
+private fun SystemStatusRow(
     iconRes: Int,
     tint: Color,
+    label: String,
     percent: Int,
-    focusRequester: FocusRequester,
-    onAdjust: (Int) -> Unit,
-    onUp: () -> Unit,
-    onDown: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
             .height(54.dp)
-            .focusRequester(focusRequester)
-            .onFocusChanged { focused = it.isFocused }
-            .onPreviewKeyEvent { event ->
-                when {
-                    event.type == KeyEventType.KeyDown &&
-                        event.key == Key.DirectionLeft -> {
-                        onAdjust(-1)
-                        true
-                    }
-                    event.type == KeyEventType.KeyDown &&
-                        event.key == Key.DirectionRight -> {
-                        onAdjust(1)
-                        true
-                    }
-                    event.type == KeyEventType.KeyDown &&
-                        event.key == Key.DirectionUp -> {
-                        onUp()
-                        true
-                    }
-                    event.type == KeyEventType.KeyDown &&
-                        event.key == Key.DirectionDown -> {
-                        onDown()
-                        true
-                    }
-                    else -> false
-                }
-            }
-            .focusable()
-            .background(
-                if (focused) Color.White.copy(alpha = 0.14f)
-                else Color.White.copy(alpha = 0.06f),
-                RoundedCornerShape(14.dp),
-            )
+            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
             .border(
                 1.dp,
-                if (focused) Color.White else Color.White.copy(alpha = 0.10f),
+                Color.White.copy(alpha = 0.10f),
                 RoundedCornerShape(14.dp),
             )
             .padding(horizontal = 14.dp),
@@ -500,33 +451,41 @@ private fun ControlSlider(
         ) {
             ControlIcon(
                 iconRes = iconRes,
-                color = if (focused) tint else tint.copy(alpha = 0.9f),
+                color = tint.copy(alpha = 0.9f),
                 size = 17.dp,
             )
         }
         Spacer(Modifier.width(10.dp))
-        Box(
-            Modifier
-                .weight(1f)
-                .height(4.dp)
-                .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(2.dp)),
-        ) {
+        Column(Modifier.weight(1f)) {
+            Row(Modifier.fillMaxWidth()) {
+                BasicText(
+                    label,
+                    style = CozyType.Caption.copy(
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = 0.68f),
+                    ),
+                )
+                Spacer(Modifier.weight(1f))
+                BasicText(
+                    "$percent%",
+                    style = CozyType.Caption.copy(fontSize = 10.sp),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
             Box(
                 Modifier
-                    .fillMaxWidth(percent.coerceIn(0, 100) / 100f)
-                    .fillMaxHeight()
-                    .background(
-                        if (focused) Color.White else Color.White.copy(alpha = 0.85f),
-                        RoundedCornerShape(2.dp),
-                    ),
-            )
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(2.dp)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(percent.coerceIn(0, 100) / 100f)
+                        .fillMaxHeight()
+                        .background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(2.dp)),
+                )
+            }
         }
-        Spacer(Modifier.width(12.dp))
-        BasicText(
-            percent.toString(),
-            style = CozyType.Caption.copy(fontSize = 10.sp),
-            modifier = Modifier.width(28.dp),
-        )
     }
 }
 

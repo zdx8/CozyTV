@@ -612,6 +612,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         prefs.brightness = next
     }
 
+    fun refreshSystemBrightness() {
+        viewModelScope.launch {
+            val hardware = withContext(Dispatchers.Default) {
+                XiaomiBrightness.level(getApplication())
+            }
+            if (hardware != null) {
+                brightness = hardware.coerceIn(0.01f, 1f)
+                brightnessHardware = true
+            }
+        }
+    }
+
     fun checkForUpdates() {
         updateJob?.cancel()
         updateState = AppUpdateState.Checking
