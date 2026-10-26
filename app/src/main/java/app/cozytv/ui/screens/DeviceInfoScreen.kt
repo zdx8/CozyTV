@@ -135,13 +135,18 @@ fun DeviceInfoScreen(vm: LauncherViewModel) {
                 )
             }
             Spacer(Modifier.height(8.dp))
+            // resolveActivity() is a synchronous binder call — cache it
+            // instead of running it on every recomposition.
+            val isCozyDefault = remember(context, revision) {
+                DefaultDesktop.isCozyDefault(context)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 CountTile("应用", "${vm.apps.size}", Modifier.weight(1f))
                 CountTile("信号源", "${vm.sources.size}", Modifier.weight(1f))
                 CountTile("直播源", "${vm.liveSourceCount}", Modifier.weight(1f))
                 CountTile(
                     "默认桌面",
-                    if (DefaultDesktop.isCozyDefault(context)) "CozyTV" else "原厂",
+                    if (isCozyDefault) "CozyTV" else "原厂",
                     Modifier.weight(1f),
                 )
             }

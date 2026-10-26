@@ -35,10 +35,14 @@ object WeatherRepository {
     suspend fun load(context: Context, force: Boolean = false): WeatherInfo? =
         withContext(Dispatchers.IO) {
             val cached = read(context)
-            if (!force && cached != null &&
-                System.currentTimeMillis() - cached.updatedAt < FRESH_MS
-            ) {
-                return@withContext cached
+            if (!force && cached != null) {
+                val age = System.currentTimeMillis() - cached.updatedAt
+                // A negative age means the clock was moved backwards
+                // (NTP correction). The old check treated that as "fresh
+                // forever" and the weather never refreshed again.
+                if (age in 0 until FRESH_MS) {
+                    return@withContext cached
+                }
             }
             val fetched = runCatching { fetch() }.getOrNull()
             if (fetched != null) {

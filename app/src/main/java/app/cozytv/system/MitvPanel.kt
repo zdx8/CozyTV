@@ -33,9 +33,11 @@ object MitvPanel {
     @Synchronized
     fun usable(context: Context): Boolean {
         verified?.let { return it }
+        var cacheable = true
         val ok = run {
             if (Build.MODEL in UNTESTED_MODELS) {
                 Log.w(TAG, "model ${Build.MODEL} is not probed")
+                cacheable = false
                 return@run false
             }
             // Some ASTP0 firmware reports no backLightForNormal value while its
@@ -44,9 +46,17 @@ object MitvPanel {
             val before = readSettled()
             if (before == null) {
                 Log.w(TAG, "backlight read unavailable")
+                // The firmware service may simply not be up yet (it is
+                // probed during app start). Do not cache this negative
+                // result — otherwise the hardware backlight stays dead
+                // for the whole session.
+                cacheable = false
                 return@run false
             }
-            if (before !in 1..100) return@run false
+            if (before !in 1..100) {
+                cacheable = false
+                return@run false
+            }
             val step = if (before >= 50) -PROBE_STEP else PROBE_STEP
             setDelta(step)
             val moved = readSettled()
@@ -62,17 +72,22 @@ object MitvPanel {
             }
             matches
         }
-        verified = ok
+        if (cacheable) verified = ok
         return ok
     }
 
     @Synchronized
     fun level(context: Context): Int? = readBacklight() ?: settingLevel(context)
 
+    @Synchronized
     fun setBacklight(context: Context, from: Int, to: Int) {
         val value = to.coerceIn(1, 100)
-        val current = from.coerceIn(1, 100)
-        val delta = value - current
+        // The firmware transaction is a *relative* delta, so the baseline
+        // has to be the panel's real level. The caller's `from` is only a
+        // cached reading — it goes stale as soon as the user changes the
+        // backlight with the original remote, and the error accumulates.
+        val actual = readBacklight() ?: from.coerceIn(1, 100)
+        val delta = value - actual
         if (delta != 0) setDelta(delta)
         // Keep the firmware setting in sync when this build permits the write.
         // A third-party launcher is often refused, which is non-fatal because
@@ -82,9 +97,15 @@ object MitvPanel {
         }.onFailure { Log.d(TAG, "setting write refused: $it") }
     }
 
+    /**
+     * Reading the panel level from the system setting. Returns null when
+     * the setting does not exist — the old default of 50 was cached as
+     * if it were a real reading and became the baseline of the first
+     * brightness adjustment.
+     */
     private fun settingLevel(context: Context): Int? =
         runCatching {
-            Settings.System.getInt(context.contentResolver, SETTING, 50)
+            Settings.System.getInt(context.contentResolver, SETTING)
         }.getOrNull()
 
     private fun readBacklight(): Int? {

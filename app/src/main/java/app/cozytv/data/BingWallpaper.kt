@@ -49,7 +49,10 @@ object BingWallpaperRepository {
         val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
         val safeCount = count.coerceIn(1, 3)
         val stored = readStoredGallery(directory)
-        val cached = decodeStoredGallery(directory, stored)
+        // Only decode what is actually needed. The gallery metadata can
+        // hold 16 entries and every one of them was decoded into a
+        // bitmap (up to ~14 MB each) although the UI shows three.
+        val cached = decodeStoredGallery(directory, stored, safeCount)
         if (!force &&
             cached.size >= safeCount &&
             cached.any { it.date == today }
@@ -200,17 +203,24 @@ object BingWallpaperRepository {
     private fun decodeStoredGallery(
         directory: File,
         entries: List<StoredWallpaper>,
+        limit: Int,
     ): List<BingWallpaper> {
         val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-        return entries.mapNotNull { entry ->
+        // Today's picture first — the caller checks whether the gallery
+        // contains it, and it must not be pushed out by older entries.
+        val ordered = entries.sortedByDescending { it.metadata.date == today }
+        val decoded = mutableListOf<BingWallpaper>()
+        for (entry in ordered) {
+            if (decoded.size >= limit) break
             val file = File(directory, entry.fileName)
-            if (!file.exists()) return@mapNotNull null
+            if (!file.exists()) continue
             decodeWallpaper(
                 file = file,
                 metadata = entry.metadata,
                 stale = entry.metadata.date != today,
-            )
+            )?.let { decoded += it }
         }
+        return decoded
     }
 
     private fun readLatestCached(directory: File): BingWallpaper? {
@@ -233,7 +243,9 @@ object BingWallpaperRepository {
         BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         var sample = 1
-        while (bounds.outWidth / sample > 2560 || bounds.outHeight / sample > 1440) sample *= 2
+        // 1920x1080 is the largest picture a TV shows; decoding the
+        // original (up to 3840x2160) only burns heap on the box.
+        while (bounds.outWidth / sample > 1920 || bounds.outHeight / sample > 1080) sample *= 2
         val bitmap = BitmapFactory.decodeFile(
             file.path,
             BitmapFactory.Options().apply { inSampleSize = sample },

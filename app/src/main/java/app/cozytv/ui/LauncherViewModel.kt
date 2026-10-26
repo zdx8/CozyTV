@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,6 +54,14 @@ private val YOUTUBE_PACKAGES = setOf(
 )
 private const val TV_SETTINGS = "com.android.tv.settings"
 private const val TV_REMOTE_SERVICE = "com.google.android.tv.remote.service"
+
+/**
+ * Prefix of the subscription names CozyTV writes into TVLive's store.
+ * Entries carrying it are owned by CozyTV and are pruned when the user
+ * removes the source here. (Kept identical to the names used before
+ * the reconciliation logic so existing installs clean up as well.)
+ */
+private const val COZY_SUBSCRIPTION_PREFIX = "CozyTV 源 "
 private val HOME_DEFAULT_EXCLUDED = setOf(
     TV_SETTINGS,
     TV_REMOTE_SERVICE,
@@ -70,6 +79,16 @@ enum class LauncherScreen {
     Settings,
 }
 
+/**
+ * A transient toast shown on the home screen.
+ *
+ * The [id] makes every notice a distinct state value. With a plain
+ * String the second identical message (e.g. "已收藏" twice in a row)
+ * was swallowed by the structural equality of `mutableStateOf` and the
+ * user never saw the second confirmation.
+ */
+data class LauncherNotice(val id: Long, val text: String)
+
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = LauncherPreferences(application)
     private var loadJob: Job? = null
@@ -79,6 +98,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private var liveJob: Job? = null
     private var liveRetryJob: Job? = null
     private var updateJob: Job? = null
+    private var brightnessJob: Job? = null
     private var liveGroups: List<List<LiveChannel>> = emptyList()
     private var liveGroupUrls: List<String> = emptyList()
     private var liveChannelIndex = 0
@@ -104,6 +124,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         private set
     var liveMessage by mutableStateOf<String?>(null)
         private set
+
+    /** Save summary waiting to be merged into the next [liveMessage]. */
+    private var pendingSaveSummary: String? = null
     var liveSourceIndex by mutableIntStateOf(0)
         private set
     var liveSourceCount by mutableIntStateOf(0)
@@ -142,44 +165,59 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         private set
     var updateState by mutableStateOf<AppUpdateState>(AppUpdateState.Idle)
         private set
-    var notice by mutableStateOf<String?>(null)
+    var notice by mutableStateOf<LauncherNotice?>(null)
         private set
+    private var noticeSeq = 0L
+
+    private fun notify(text: String) {
+        noticeSeq += 1
+        notice = LauncherNotice(noticeSeq, text)
+    }
     val appVersionName: String = runCatching {
         getApplication<Application>().packageManager
             .getPackageInfo(getApplication<Application>().packageName, 0)
             .versionName
     }.getOrNull().orEmpty()
 
-    val visibleApps: List<TvApp>
-        get() = apps.filter { it.key !in hiddenKeys }
+    /**
+     * Derived lists. `derivedStateOf` keeps the filter/sort work out of
+     * the recomposition path: the home screen recomposes every 30 s for
+     * the clock, and the old plain getters re-sorted every installed app
+     * on each of those passes.
+     */
+    val visibleApps: List<TvApp> by derivedStateOf {
+        apps.filter { it.key !in hiddenKeys }
+    }
 
-    val displayedApps: List<TvApp>
-        get() = apps.filter { it.key !in hiddenKeys || showHiddenApps }
+    val displayedApps: List<TvApp> by derivedStateOf {
+        apps.filter { it.key !in hiddenKeys || showHiddenApps }
+    }
 
-    val homeApps: List<TvApp>
-        get() {
-            val limit = if (favoritesGrid) 8 else 4
-            val rawPicked = AppOrder.home(
-                apps = visibleApps,
-                favorites = favorites,
-                recents = recents,
-                limit = limit,
-            )
-            val picked = rawPicked.filter {
-                it.key in favorites || it.packageName !in HOME_DEFAULT_EXCLUDED
-            }
-            if (picked.size >= 4) return picked.take(limit)
-
-            val target = minOf(4, limit)
-            val seen = picked.mapTo(mutableSetOf()) { it.key }
-            val defaults = visibleApps
-                .filter { it.packageName !in HOME_DEFAULT_EXCLUDED }
-                .sortedWith(compareByDescending<TvApp> { it.isLeanback }.thenBy { it.label })
-            val fill = defaults
-                .filter { seen.add(it.key) }
-                .take((target - picked.size).coerceAtLeast(0))
-            return (picked + fill).take(limit)
+    val homeApps: List<TvApp> by derivedStateOf {
+        val limit = if (favoritesGrid) 8 else 4
+        val rawPicked = AppOrder.home(
+            apps = visibleApps,
+            favorites = favorites,
+            recents = recents,
+            limit = limit,
+        )
+        val picked = rawPicked.filter {
+            it.key in favorites || it.packageName !in HOME_DEFAULT_EXCLUDED
         }
+        // The grid mode shows 8 tiles, so the home row must be able to
+        // fill all 8. The old hard-coded 4 made the second row show
+        // placeholder tiles even when the TV had dozens of apps.
+        if (picked.size >= limit) return@derivedStateOf picked.take(limit)
+
+        val seen = picked.mapTo(mutableSetOf()) { it.key }
+        val defaults = visibleApps
+            .filter { it.packageName !in HOME_DEFAULT_EXCLUDED }
+            .sortedWith(compareByDescending<TvApp> { it.isLeanback }.thenBy { it.label })
+        val fill = defaults
+            .filter { seen.add(it.key) }
+            .take((limit - picked.size).coerceAtLeast(0))
+        (picked + fill).take(limit)
+    }
 
     init {
         weather = WeatherRepository.cached(getApplication())
@@ -270,12 +308,22 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             var firstError: String? = null
             if (urls.isEmpty()) {
                 groups += listOf(LivePlaylistRepository.demoChannel())
+                groupUrls += ""
             } else {
                 val loaded = coroutineScope {
                     urls.map { url ->
                         async {
-                            runCatching {
-                                LivePlaylistRepository.loadChannels(getApplication(), url).take(12)
+                            // runCatching also catches CancellationException,
+                            // which would keep a cancelled download alive
+                            // until its socket timeout expired.
+                            try {
+                                Result.success(
+                                    LivePlaylistRepository.loadChannels(getApplication(), url).take(12),
+                                )
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (error: Throwable) {
+                                Result.failure(error)
                             }
                         }
                     }.awaitAll()
@@ -296,13 +344,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
             }
-            if (groups.isEmpty()) {
+            val loadMessage: String? = if (groups.isEmpty()) {
                 groups += listOf(LivePlaylistRepository.demoChannel())
-                liveMessage = "所有直播源都不可用，已切换到演示频道" +
+                // Keep liveGroups and liveGroupUrls aligned: the active
+                // TVLive subscription is picked with getOrNull(index).
+                groupUrls += ""
+                "所有直播源都不可用，已切换到演示频道" +
                     (firstError?.let { " · $it" } ?: "")
             } else if (failed > 0) {
-                liveMessage = "已跳过 $failed 个不可用的直播源"
+                "已跳过 $failed 个不可用的直播源"
+            } else {
+                null
             }
+            // The save summary and the load summary are merged here.
+            // Writing the save message directly used to race with this
+            // coroutine, and which one survived was a coin flip.
+            liveMessage = listOfNotNull(pendingSaveSummary, loadMessage)
+                .joinToString(" · ")
+                .ifEmpty { null }
+            pendingSaveSummary = null
             liveGroups = groups
             liveGroupUrls = groupUrls
             liveSourceCount = groups.size
@@ -311,6 +371,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             liveChannel = groups.first().first()
             liveAttempt += 1
             liveLoading = false
+            // Push the (reconciled) subscription list and the active
+            // source into TVLive now that the groups are known — the
+            // previous call happened before the refresh and therefore
+            // pointed at the previous selection.
+            syncTvLiveSubscriptions()
         }
     }
 
@@ -356,12 +421,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         prefs.livePlaylistUrls = clean
         syncTvLiveSubscriptions()
         liveSourceRevision += 1
-        refreshLiveSource()
-        liveMessage = if (clean.isEmpty()) {
+        // The summary is merged with the load result inside
+        // refreshLiveSource(), so both messages survive.
+        pendingSaveSummary = if (clean.isEmpty()) {
             "已使用内置演示源"
         } else {
             "已保存 ${clean.size} 个直播源"
         }
+        refreshLiveSource()
         if (navigateHome) screen = LauncherScreen.Home
         return true
     }
@@ -383,7 +450,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         loading = true
         loadJob = viewModelScope.launch {
             apps = LauncherRepository.load(getApplication())
-            sources = SourceRepository.load(getApplication())
+            // TvInputManagerService calls are synchronous binder IPCs —
+            // they must not run on the main thread.
+            sources = withContext(Dispatchers.IO) {
+                SourceRepository.load(getApplication())
+            }
             defaultSourceId = sources.firstOrNull { it.id == prefs.defaultSourceId }?.id
                 ?: SourceRepository.TV_LIVE_ID
             maybeLaunchDefaultSource()
@@ -430,7 +501,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun openStockDesktop() {
         if (!DefaultDesktop.openStock(getApplication())) {
-            notice = "未找到可用的原厂桌面"
+            notify("未找到可用的原厂桌面")
         }
     }
 
@@ -445,7 +516,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun restoreStockDesktop() {
         if (!DefaultDesktop.restoreStock(getApplication())) {
-            notice = "未找到可用的原厂桌面"
+            notify("未找到可用的原厂桌面")
         }
     }
 
@@ -464,22 +535,39 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     .putExtra(TVLiveEmbedded.EXTRA_EMBEDDED, true),
             )
         }.onFailure {
-            notice = "TVLive 启动失败"
+            notify("TVLive 启动失败")
         }
     }
 
+    /**
+     * Mirror CozyTV's live sources into TVLive's subscription store.
+     *
+     * The old version only ever *added* entries, so a source the user
+     * deleted in CozyTV kept playing inside TVLive. Now the store is
+     * reconciled: stale CozyTV entries are dropped and the currently
+     * selected source is marked active (empty when there is none).
+     */
     private fun syncTvLiveSubscriptions() {
         runCatching {
             val context = getApplication<Application>()
-            val known = SubscriptionStore.list(context).mapTo(mutableSetOf()) { it.url }
-            prefs.livePlaylistUrls.forEachIndexed { index, url ->
-                if (known.add(url)) {
-                    SubscriptionStore.add(context, url, "CozyTV 源 ${index + 1}")
+            val target = prefs.livePlaylistUrls
+            val known = SubscriptionStore.list(context)
+            known.filter { entry ->
+                entry.name.startsWith(COZY_SUBSCRIPTION_PREFIX) && entry.url !in target
+            }.forEach { entry ->
+                SubscriptionStore.remove(context, entry.url)
+            }
+            target.forEachIndexed { index, url ->
+                if (known.none { it.url == url }) {
+                    SubscriptionStore.add(
+                        context,
+                        url,
+                        "$COZY_SUBSCRIPTION_PREFIX${index + 1}",
+                    )
                 }
             }
-            liveGroupUrls.getOrNull(liveSourceIndex)?.let { active ->
-                SubscriptionStore.setActive(context, active)
-            }
+            val active = liveGroupUrls.getOrNull(liveSourceIndex)
+            SubscriptionStore.setActive(context, active ?: "")
         }
     }
 
@@ -537,8 +625,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
         favorites = updated
         prefs.favorites = updated
-        notice = getApplication<Application>().getString(
-            if (added) R.string.favorite_added else R.string.favorite_removed,
+        notify(
+            getApplication<Application>().getString(
+                if (added) R.string.favorite_added else R.string.favorite_removed,
+            ),
         )
     }
 
@@ -573,7 +663,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
         hiddenKeys = next
         prefs.hiddenApps = next
-        notice = if (hidden) "已隐藏 ${app.label}" else "已取消隐藏 ${app.label}"
+        notify(if (hidden) "已隐藏 ${app.label}" else "已取消隐藏 ${app.label}")
     }
 
     fun updateShowHiddenApps(value: Boolean) {
@@ -588,7 +678,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }.onFailure {
-            notice = "无法打开卸载界面"
+            notify("无法打开卸载界面")
         }
     }
 
@@ -613,7 +703,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshSystemBrightness() {
-        viewModelScope.launch {
+        // The control centre polls this every second. Without cancelling
+        // the previous job each poll added another coroutine that stayed
+        // blocked in the vendor binder transaction.
+        brightnessJob?.cancel()
+        brightnessJob = viewModelScope.launch {
             val hardware = withContext(Dispatchers.Default) {
                 XiaomiBrightness.level(getApplication())
             }
@@ -707,7 +801,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun openHomeSettings() {
         if (launchIfResolved(Intent(Settings.ACTION_HOME_SETTINGS))) return
         if (launchIfResolved(Intent(Settings.ACTION_SETTINGS))) return
-        notice = "系统没有提供默认桌面设置页"
+        notify("系统没有提供默认桌面设置页")
     }
 
     fun openSystemSettings() {
@@ -723,7 +817,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         ) {
             return
         }
-        notice = "无法打开系统设置"
+        notify("无法打开系统设置")
     }
 
     fun openWifiSettings() {

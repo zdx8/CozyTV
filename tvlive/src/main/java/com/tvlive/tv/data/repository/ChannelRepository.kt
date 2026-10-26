@@ -126,7 +126,7 @@ class ChannelRepository(
                 } else {
                     playlistDao.insert(
                         PlaylistEntity(
-                            name = suggestedName ?: URI.create(url).host ?: url,
+                            name = suggestedName ?: hostOf(url),
                             localPath = null,
                             remoteUrl = url,
                             loadedAtMs = System.currentTimeMillis(),
@@ -151,6 +151,22 @@ class ChannelRepository(
                 ImportSummary(playlistId, parsed.channelCount)
             }
         }
+
+    /**
+     * Host name of a subscription URL, or the URL itself when it cannot
+     * be parsed.
+     *
+     * `URI.create(url)` throws on URLs containing spaces or non-ASCII
+     * characters — very common in Chinese IPTV subscriptions
+     * (`http://example.com:8080/我的订阅.m3u`). The old code called it
+     * unguarded, so the exception aborted an otherwise successful
+     * download and the user saw "订阅加载失败".
+     */
+    private fun hostOf(url: String): String =
+        runCatching { URL(url).host }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: url
 
     /**
      * Fetch a URL with HttpURLConnection. Returns the response bytes
@@ -261,6 +277,3 @@ class ChannelRepository(
 
     data class ImportSummary(val playlistId: Long, val channelCount: Int)
 }
-
-/** Lightweight URI alias to avoid pulling java.net.URI all over. */
-private typealias URI = java.net.URI

@@ -102,6 +102,15 @@ class PlayerController(
     private var prepared = false
 
     /**
+     * Monotonic id of the newest playback request. The redirect resolver
+     * runs on a background thread and posts its result back to the main
+     * thread; without this guard a late result could switch playback back
+     * to a channel the user already left, or resurrect the player after
+     * the Activity was destroyed.
+     */
+    private var playRequestId = 0
+
+    /**
      * The live/VOD mode the current LoadControl was built for. When
      * [play] switches between a live and a VOD stream we rebuild the
      * player so the buffer tuning actually takes effect.
@@ -195,7 +204,13 @@ class PlayerController(
         if (player != null && loadControlIsLive == live) return
         if (player != null) {
             Log.i(TAG, "Live mode changed ($loadControlIsLive -> $live) — rebuilding player")
-            release()
+            // NOTE: only the player is rebuilt here. The old code called
+            // release(), which also cleared currentStreamUrl — and that
+            // happened *after* doStartPlayback() had already stored the
+            // new URL, so the reconnect runnable found a null URL and
+            // silently skipped every retry while the UI sat in
+            // RECONNECTING (black screen, no error).
+            releasePlayerOnly()
         }
 
         val loadControl = buildLoadControl(live)
@@ -212,14 +227,14 @@ class PlayerController(
         // navigating from when it fetches a sub-playlist or a segment.
         // Without it, the gateway serves 401 / HTML for the very
         // requests that contain the actual stream.
-        PlayerConfig.defaultRequestHeaders["Referer"] = playlistReferer
-        val baseHttpFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(PlayerConfig.HTTP_CONNECT_TIMEOUT_MS)
-            .setReadTimeoutMs(PlayerConfig.HTTP_READ_TIMEOUT_MS)
-            .setAllowCrossProtocolRedirects(true)
-            .setUserAgent(PlayerConfig.userAgent)
-            .setDefaultRequestProperties(PlayerConfig.defaultRequestHeaders)
-        val httpFactory = ChannelAwareDataSourceFactory(baseHttpFactory) { currentOptions }
+        //
+        // Build a per-player snapshot instead of mutating the
+        // process-wide map: the data source factory reads that map on
+        // ExoPlayer's background threads while we would be writing it
+        // here on the main thread.
+        val requestHeaders = HashMap(PlayerConfig.defaultRequestHeaders)
+        requestHeaders["Referer"] = playlistReferer
+        val httpFactory = ChannelAwareDataSourceFactory(requestHeaders) { currentOptions }
 
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(httpFactory)
@@ -285,6 +300,12 @@ class PlayerController(
     fun play(streamUrl: String, title: String? = null, options: ChannelOptions = ChannelOptions.empty()) {
         reconnectAttempt = 0
         errorReportedTerminal = false
+        // A channel switch is an explicit "play this" request. Without
+        // this reset a user who paused (playWhenReadyCached == false)
+        // would switch channel and get a new stream that loads but never
+        // starts — black screen, no sound, no error.
+        playWhenReadyCached = true
+        val requestId = ++playRequestId
 
         // 无扩展名的短链通常是 302 到另一台主机/另一种协议的 HLS
         // （https://iptv.example.com/608807420 → http://migu....:8080/...m3u8）。
@@ -301,6 +322,14 @@ class PlayerController(
             val resolved = resolveRedirects(streamUrl)
             Log.i(TAG, "Resolved redirect: $streamUrl -> ${resolved.take(120)}")
             Handler(Looper.getMainLooper()).post {
+                // The user may have switched channel (or left the screen)
+                // while we were resolving. A stale result must be dropped,
+                // otherwise playback jumps back to the old channel or a
+                // new player is built after release().
+                if (requestId != playRequestId) {
+                    Log.i(TAG, "Discarding stale redirect result for $streamUrl")
+                    return@post
+                }
                 doStartPlayback(resolved, title, options)
             }
         }.apply { name = "hftv-redirect"; isDaemon = true }.start()
@@ -418,7 +447,10 @@ class PlayerController(
 
     fun togglePlayPause() {
         val p = player ?: return
-        if (p.isPlaying) p.pause() else p.play()
+        // Use playWhenReady, not isPlaying: while the stream is still
+        // buffering isPlaying is false, so the old check called play()
+        // when the user meant "pause".
+        if (p.playWhenReady) p.pause() else p.play()
     }
 
     /**
@@ -427,7 +459,11 @@ class PlayerController(
      */
     fun pause() {
         val p = player ?: return
-        if (p.isPlaying) p.pause()
+        // Deliberately unconditional: `isPlaying` is false while the
+        // player is buffering, so the old guard turned pause() into a
+        // no-op exactly when it mattered — the Activity had already
+        // stopped but the stream kept playing (and kept making noise).
+        p.pause()
     }
 
     /**
@@ -438,7 +474,7 @@ class PlayerController(
      */
     fun resume() {
         val p = player ?: return
-        if (!p.isPlaying) p.play()
+        if (!p.playWhenReady) p.play()
     }
 
     fun stop() {
@@ -451,6 +487,24 @@ class PlayerController(
     fun release() {
         stopWatchdogs()
         currentStreamUrl = null
+        // Invalidate any redirect resolution still in flight so it cannot
+        // rebuild a player after the Activity is gone.
+        playRequestId++
+        prepared = false
+        // The SurfaceHolder callback keeps this controller (and through
+        // it the Activity) reachable; drop it explicitly.
+        pendingSurfaceView?.holder?.removeCallback(surfaceCallback)
+        pendingSurfaceView = null
+        releasePlayerOnly()
+    }
+
+    /**
+     * Release only the ExoPlayer instance. Keeps [currentStreamUrl],
+     * [prepared] and the request id intact — used when the player has to
+     * be rebuilt because the live/VOD profile changed.
+     */
+    private fun releasePlayerOnly() {
+        stopWatchdogs()
         player?.removeListener(playerListener)
         player?.release()
         player = null
@@ -458,6 +512,13 @@ class PlayerController(
     }
 
     fun isPlaying(): Boolean = player?.isPlaying == true
+
+    /**
+     * True when the player is supposed to be playing. Unlike [isPlaying]
+     * this stays true while the stream is buffering, which is what the
+     * Activity needs to decide whether to resume on return.
+     */
+    fun isPlayWhenReady(): Boolean = player?.playWhenReady == true
 
     /**
      * The URL the player last tried to play, or null when the
@@ -790,23 +851,25 @@ class PlayerController(
  */
 @OptIn(UnstableApi::class)
 internal class ChannelAwareDataSourceFactory(
-    private val base: DefaultHttpDataSource.Factory,
+    private val baseHeaders: Map<String, String>,
     private val optionsProvider: () -> ChannelOptions
 ) : androidx.media3.datasource.DataSource.Factory {
 
     override fun createDataSource(): androidx.media3.datasource.DataSource {
         val options = optionsProvider()
         // Layer the per-channel #EXTVLCOPT headers on top of the
-        // process-wide defaults (Referer + User-Agent). The channel
+        // player-level defaults (Referer + User-Agent). The channel
         // wins for any duplicate key — that's the only point of an
         // #EXTVLCOPT override — so the channel map is applied LAST:
         // in a HashMap a later putAll silently replaces earlier
         // entries with the same key, and ChannelOptions uses the
         // exact same key strings ("User-Agent" / "Referer").
-        val properties = HashMap<String, String>().apply {
-            putAll(PlayerConfig.defaultRequestHeaders)
-            putAll(options.asDefaultRequestProperties())
-        }
+        //
+        // baseHeaders is an immutable snapshot taken when the player was
+        // built; copying it avoids iterating a map that another thread
+        // could be mutating.
+        val properties = HashMap<String, String>(baseHeaders)
+        properties.putAll(options.asDefaultRequestProperties())
         // Build a new factory per request, applying the per-channel
         // default headers. Cheap; the factory is just a builder.
         // In Media3 1.1.x the headers are set as a Map on the

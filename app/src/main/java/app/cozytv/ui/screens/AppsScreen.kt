@@ -50,13 +50,18 @@ fun AppsScreen(vm: LauncherViewModel) {
     val requesters = remember { HashMap<String, FocusRequester>() }
     fun requester(app: TvApp) = requesters.getOrPut(app.key) { FocusRequester() }
     var menuApp by remember { mutableStateOf<TvApp?>(null) }
+    // The tile the user is on. When the list changes (an app updates in
+    // the background, an app is hidden) the old code moved the focus back
+    // to the first entry and lost the browsing position.
+    var focusedKey by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(vm.loading, vm.displayedApps.map(TvApp::key)) {
         if (vm.loading) return@LaunchedEffect
         delay(100)
-        vm.displayedApps.firstOrNull()?.let {
-            runCatching { requester(it).requestFocus() }
-        }
+        val apps = vm.displayedApps
+        val target = focusedKey?.let { key -> apps.firstOrNull { it.key == key } }
+            ?: apps.firstOrNull()
+        target?.let { runCatching { requester(it).requestFocus() } }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -124,6 +129,7 @@ fun AppsScreen(vm: LauncherViewModel) {
                             useBanner = true,
                             hidden = app.key in vm.hiddenKeys,
                             focusRequester = requester(app),
+                            onFocused = { focusedKey = app.key },
                             onClick = { vm.launch(app) },
                             onLongClick = { vm.toggleFavorite(app) },
                             onMenu = { menuApp = app },
@@ -154,8 +160,8 @@ fun AppsScreen(vm: LauncherViewModel) {
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            vm.notice?.let {
-                LaunchedEffect(it) {
+            vm.notice?.let { notice ->
+                LaunchedEffect(notice.id) {
                     delay(1800)
                     vm.dismissNotice()
                 }
@@ -173,7 +179,7 @@ fun AppsScreen(vm: LauncherViewModel) {
                         )
                         .padding(horizontal = 18.dp, vertical = 9.dp),
                 ) {
-                    BasicText(it, style = CozyType.Label.copy(color = CozyColors.Paper))
+                    BasicText(notice.text, style = CozyType.Label.copy(color = CozyColors.Paper))
                 }
             }
         }

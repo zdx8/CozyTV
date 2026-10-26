@@ -36,7 +36,7 @@ class LauncherPreferences(context: Context) {
         set(value) = prefs.edit().putFloat(KEY_BRIGHTNESS, value).apply()
 
     var hiddenApps: Set<String>
-        get() = prefs.getStringSet(KEY_HIDDEN_APPS, emptySet()).orEmpty()
+        get() = prefs.getStringSet(KEY_HIDDEN_APPS, emptySet())?.toSet().orEmpty()
         set(value) = prefs.edit().putStringSet(KEY_HIDDEN_APPS, value).apply()
 
     var showHiddenApps: Boolean
@@ -52,7 +52,7 @@ class LauncherPreferences(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_FAVORITES_CURATED, value).apply()
 
     var favorites: Set<String>
-        get() = prefs.getStringSet(KEY_FAVORITES, emptySet()).orEmpty()
+        get() = prefs.getStringSet(KEY_FAVORITES, emptySet())?.toSet().orEmpty()
         set(value) = prefs.edit().putStringSet(KEY_FAVORITES, value).apply()
 
     var recents: List<String>
@@ -62,10 +62,17 @@ class LauncherPreferences(context: Context) {
             .filter(String::isNotBlank)
         set(value) = prefs.edit().putString(KEY_RECENTS, value.take(12).joinToString("|")).apply()
 
+    /**
+     * First configured live source. Writing it adds to the list instead
+     * of replacing it — the old setter wiped every other source the
+     * user had configured.
+     */
     var livePlaylistUrl: String
         get() = livePlaylistUrls.firstOrNull().orEmpty()
         set(value) {
-            livePlaylistUrls = listOf(value.trim()).filter(String::isNotEmpty)
+            val trimmed = value.trim()
+            if (trimmed.isEmpty()) return
+            livePlaylistUrls = (livePlaylistUrls + trimmed).distinct()
         }
 
     var livePlaylistUrls: List<String>

@@ -859,7 +859,10 @@ class PlaybackActivity : FragmentActivity(), ChannelDrawer.Callbacks {
     override fun onStop() {
         // Remember whether the user had playback running before we
         // lose the foreground, then pause.
-        wasPlayingBeforeStop = controller.isPlaying()
+        // Use playWhenReady semantics: a stream that is still buffering
+        // has isPlaying == false, and treating that as "not playing"
+        // meant the TV kept playing audio after the user left.
+        wasPlayingBeforeStop = controller.isPlayWhenReady()
         controller.pause()
         super.onStop()
     }

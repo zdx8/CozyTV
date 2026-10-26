@@ -36,6 +36,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -69,8 +71,14 @@ fun LiveSourceScreen(vm: LauncherViewModel) {
         )
     }
     var portalUrl by remember { mutableStateOf<String?>(null) }
-    val qrBitmap = remember(portalUrl) {
-        portalUrl?.let { runCatching { makeQrBitmap(it) }.getOrNull() }
+    // Rendering a 480x480 QR code means 230k pixel writes — do it off
+    // the main thread, otherwise entering this page visibly stutters.
+    var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(portalUrl) {
+        val url = portalUrl ?: return@LaunchedEffect
+        qrBitmap = withContext(Dispatchers.Default) {
+            runCatching { makeQrBitmap(url) }.getOrNull()
+        }
     }
 
     DisposableEffect(portal) {
@@ -250,9 +258,9 @@ fun LiveSourceScreen(vm: LauncherViewModel) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            if (qrBitmap != null) {
+                            qrBitmap?.let { bitmap ->
                                 Image(
-                                    bitmap = qrBitmap.asImageBitmap(),
+                                    bitmap = bitmap.asImageBitmap(),
                                     contentDescription = "扫码管理直播源",
                                     modifier = Modifier
                                         .size(150.dp)
@@ -274,7 +282,8 @@ fun LiveSourceScreen(vm: LauncherViewModel) {
                                         fontSize = 9.sp,
                                     ),
                                 )
-                            } else {
+                            }
+                            if (qrBitmap == null) {
                                 BasicText(
                                     "局域网输入未启动\n请确认电视已连接 Wi-Fi 或网线",
                                     style = CozyType.Caption,

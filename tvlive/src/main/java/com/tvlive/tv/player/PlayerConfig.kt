@@ -92,13 +92,12 @@ object PlayerConfig {
      * server's session/token is bound to the originating playlist
      * document, not the app shell.
      *
-     * Exposed as a `var` (not `val`) so [PlayerController] can mutate
-     * the `Referer` entry per channel without re-allocating the map on
-     * every request — [DefaultHttpDataSource.Factory.setDefaultRequestProperties]
-     * copies the map on `createDataSource`, so mutating in place is safe
-     * between requests but not concurrently with one.
+     * Read-only on purpose: the per-player `Referer` lives in a
+     * snapshot taken by [PlayerController] when the player is built.
+     * Mutating a process-wide map here raced with ExoPlayer's
+     * background threads reading it.
      */
-    val defaultRequestHeaders: MutableMap<String, String> = mutableMapOf(
+    val defaultRequestHeaders: Map<String, String> = mapOf(
         "User-Agent" to userAgent
     )
 

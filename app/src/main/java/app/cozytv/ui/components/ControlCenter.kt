@@ -69,7 +69,14 @@ private data class NetworkSummary(val label: String, val online: Boolean)
 fun ControlCenter(vm: LauncherViewModel) {
     BackHandler(onBack = vm::closeControlCenter)
     val context = LocalContext.current
-    val audio = remember(context) { context.getSystemService(AudioManager::class.java) } ?: return
+    val audio = remember(context) { context.getSystemService(AudioManager::class.java) }
+    if (audio == null) {
+        // The back handler is already registered above, so returning
+        // without closing the panel would leave a control centre that
+        // cannot be dismissed.
+        vm.closeControlCenter()
+        return
+    }
     var volume by remember {
         mutableIntStateOf(audio.getStreamVolume(AudioManager.STREAM_MUSIC))
     }
@@ -79,7 +86,7 @@ fun ControlCenter(vm: LauncherViewModel) {
     val volumePercent = (volume * 100f / volumeMax).roundToInt()
     val brightnessPercent = if (vm.brightness < 0f) 80
     else (vm.brightness * 100f).roundToInt()
-    val network = remember(context) { readNetwork(context) }
+    var network by remember { mutableStateOf(readNetwork(context)) }
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -90,8 +97,12 @@ fun ControlCenter(vm: LauncherViewModel) {
     LaunchedEffect(audio) {
         while (true) {
             volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            // The network state has to be polled as well — it was read
+            // once when the panel opened, so the indicator kept showing
+            // the state from before the TV went offline.
+            network = readNetwork(context)
             vm.refreshSystemBrightness()
-            delay(1_000)
+            delay(2_000)
         }
     }
     val time = remember(now, vm.clock24Hour) {

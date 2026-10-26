@@ -59,9 +59,12 @@ class LiveSourcePortal(
     private fun bind(): ServerSocket? {
         for (port in DEFAULT_PORT until DEFAULT_PORT + 10) {
             runCatching {
-                return ServerSocket(port).apply {
-                    reuseAddress = true
-                }
+                // setReuseAddress must happen before bind() — setting it
+                // on an already bound socket has no effect.
+                val socket = ServerSocket()
+                socket.reuseAddress = true
+                socket.bind(java.net.InetSocketAddress(port))
+                return socket
             }
         }
         return null
@@ -90,7 +93,14 @@ class LiveSourcePortal(
             }
         }
         val body = if (method == "POST") {
-            readBody(input, headers["content-length"]?.toIntOrNull() ?: 0)
+            val length = headers["content-length"]?.toIntOrNull() ?: 0
+            if (length < 0 || length > MAX_BODY_BYTES) {
+                // A hostile or broken client could ask for 100 MB and
+                // take the whole heap of the TV down with one request.
+                respond(client, 413, errorPage())
+                return
+            }
+            readBody(input, length)
         } else {
             ""
         }
@@ -141,6 +151,9 @@ class LiveSourcePortal(
             if (byte == -1) return if (builder.isEmpty()) null else builder.toString()
             if (byte == '\n'.code) return builder.toString().trimEnd('\r')
             builder.append(byte.toChar())
+            // A client that never sends a newline could otherwise grow
+            // this buffer until the TV runs out of memory.
+            if (builder.length > MAX_HEADER_LINE) return null
         }
     }
 
@@ -253,9 +266,15 @@ class LiveSourcePortal(
     companion object {
         private const val DEFAULT_PORT = 8765
 
+        /** Largest accepted POST body (the form carries a few URLs). */
+        private const val MAX_BODY_BYTES = 64 * 1024
+
+        /** Largest accepted single HTTP header line. */
+        private const val MAX_HEADER_LINE = 8 * 1024
+
         fun localIpv4(): String? = runCatching {
             val interfaces = NetworkInterface.getNetworkInterfaces() ?: return@runCatching null
-            Collections.list(interfaces)
+            val addresses = Collections.list(interfaces)
                 .asSequence()
                 .filter { it.isUp && !it.isLoopback }
                 .sortedBy {
@@ -263,7 +282,13 @@ class LiveSourcePortal(
                 }
                 .flatMap { Collections.list(it.inetAddresses).asSequence() }
                 .filterIsInstance<Inet4Address>()
-                .firstOrNull { !it.isLoopbackAddress && it.isSiteLocalAddress }
+                .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+                .toList()
+            // Prefer a private LAN address, but accept any routable IPv4:
+            // on carrier networks the TV often gets a public or CGNAT
+            // address, and the old filter dropped it — which silently
+            // disabled the whole "add a source from your phone" feature.
+            (addresses.firstOrNull { it.isSiteLocalAddress } ?: addresses.firstOrNull())
                 ?.hostAddress
         }.getOrNull()
     }

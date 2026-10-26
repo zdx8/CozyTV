@@ -100,6 +100,8 @@ fun HomeScreen(vm: LauncherViewModel) {
     val now = rememberClock()
     var menuApp by remember { mutableStateOf<TvApp?>(null) }
     var playerFocused by remember { mutableStateOf(false) }
+    // The app tile the user is currently on (home grid).
+    var focusedKey by remember { mutableStateOf<String?>(null) }
     var lastActivityAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var resumed by remember {
@@ -136,7 +138,12 @@ fun HomeScreen(vm: LauncherViewModel) {
     LaunchedEffect(vm.loading, homeApps.map(TvApp::key)) {
         if (vm.loading) return@LaunchedEffect
         delay(120)
-        homeApps.firstOrNull()?.let { runCatching { requester(it).requestFocus() } }
+        // Keep the tile the user is on. The old code always jumped back
+        // to the first entry, so a background app update threw the user
+        // out of the row they were browsing.
+        val target = focusedKey?.let { key -> homeApps.firstOrNull { it.key == key } }
+            ?: homeApps.firstOrNull()
+        target?.let { runCatching { requester(it).requestFocus() } }
             ?: runCatching { appsRequester.requestFocus() }
     }
 
@@ -265,6 +272,7 @@ fun HomeScreen(vm: LauncherViewModel) {
                                             useBanner = false,
                                             androidIcon = true,
                                             focusRequester = requester(app),
+                                            onFocused = { focusedKey = app.key },
                                             onClick = { vm.launch(app) },
                                             onLongClick = { menuApp = app },
                                         )
@@ -300,6 +308,7 @@ fun HomeScreen(vm: LauncherViewModel) {
                                 showNameOnFocus = true,
                                 useBanner = true,
                                 focusRequester = requester(app),
+                                onFocused = { focusedKey = app.key },
                                 onClick = { vm.launch(app) },
                                 onLongClick = { menuApp = app },
                             )
@@ -331,8 +340,8 @@ fun HomeScreen(vm: LauncherViewModel) {
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            vm.notice?.let {
-                LaunchedEffect(it) {
+            vm.notice?.let { notice ->
+                LaunchedEffect(notice.id) {
                     delay(1800)
                     vm.dismissNotice()
                 }
@@ -343,7 +352,7 @@ fun HomeScreen(vm: LauncherViewModel) {
                         .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(20.dp))
                         .padding(horizontal = 18.dp, vertical = 9.dp),
                 ) {
-                    BasicText(it, style = CozyType.Label)
+                    BasicText(notice.text, style = CozyType.Label)
                 }
             }
         }

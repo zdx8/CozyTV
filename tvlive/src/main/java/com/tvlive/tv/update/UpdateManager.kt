@@ -235,7 +235,14 @@ class UpdateManager(private val activity: Activity) {
                 if (conn.responseCode !in 200..299) {
                     throw IllegalStateException("HTTP ${conn.responseCode}")
                 }
-                val total = conn.contentLengthLong.takeIf { it > 0 } ?: info.size
+                // URLConnection.getContentLengthLong() only exists from
+                // API 24 on, but this module supports API 23 — calling it
+                // unconditionally threw NoSuchMethodError on Android 6.
+                val total = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    conn.contentLengthLong.takeIf { it > 0 }
+                } else {
+                    conn.contentLength.takeIf { it > 0 }?.toLong()
+                } ?: info.size
                 conn.inputStream.use { input ->
                     target.outputStream().use { output ->
                         val buffer = ByteArray(64 * 1024)

@@ -23,7 +23,12 @@ object DefaultDesktop {
         return manager.queryIntentActivities(homeIntent, PackageManager.MATCH_ALL)
             .asSequence()
             .filter {
-                it.activityInfo.enabled && it.activityInfo.applicationInfo.enabled
+                it.activityInfo.enabled &&
+                    it.activityInfo.applicationInfo.enabled &&
+                    // MATCH_ALL disables the platform's own filtering, so
+                    // non-exported HOME activities would show up here and
+                    // fail with a SecurityException when launched.
+                    it.activityInfo.exported
             }
             .map {
                 val info = it.activityInfo

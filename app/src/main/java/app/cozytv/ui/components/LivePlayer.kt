@@ -62,6 +62,12 @@ fun LivePlayer(
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val currentOnPlaybackError by rememberUpdatedState(onPlaybackError)
+    // The lifecycle observer below is installed once (its keys never
+    // change), so it must not capture the `channel` value of the first
+    // composition — at that point the channel is still null and the
+    // preview would never resume after the app came back from the
+    // background. rememberUpdatedState always yields the latest value.
+    val currentChannel by rememberUpdatedState(channel)
     val httpFactory = remember(context) {
         DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
@@ -108,7 +114,7 @@ fun LivePlayer(
     DisposableEffect(lifecycle, player) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> if (channel != null) player.play()
+                Lifecycle.Event.ON_START -> if (currentChannel != null) player.play()
                 Lifecycle.Event.ON_STOP -> player.pause()
                 else -> Unit
             }

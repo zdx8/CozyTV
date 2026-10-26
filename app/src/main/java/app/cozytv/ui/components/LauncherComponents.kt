@@ -49,6 +49,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -79,9 +80,11 @@ fun AppTile(
     hidden: Boolean = false,
     onMenu: (() -> Unit)? = null,
     focusRequester: FocusRequester,
+    onFocused: () -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
+    val density = LocalDensity.current
     var focused by remember { mutableStateOf(false) }
     var pressed by remember { mutableStateOf(false) }
     var longPressFired by remember { mutableStateOf(false) }
@@ -118,7 +121,9 @@ fun AppTile(
             .focusRequester(focusRequester)
             .onFocusChanged {
                 focused = it.isFocused
-                if (!it.isFocused) {
+                if (it.isFocused) {
+                    onFocused()
+                } else {
                     pressed = false
                     longPressJob?.cancel()
                 }
@@ -200,7 +205,13 @@ fun AppTile(
                                 Color(0xFF12182E).copy(alpha = 0.96f),
                             ),
                             start = Offset.Zero,
-                            end = Offset(width.value * 2f, height.value * 2f),
+                            // Offset works in pixels, not in dp — using
+                            // Dp.value here made the gradient end at
+                            // 2/3 of the tile on every density.
+                            end = Offset(
+                                with(density) { width.toPx() } * 2f,
+                                with(density) { height.toPx() } * 2f,
+                            ),
                         ),
                         CardShape,
                     )

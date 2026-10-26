@@ -247,8 +247,16 @@ class M3UParser {
     // ---- Decoding --------------------------------------------------------
 
     /**
-     * Multi-encoding decode. Mirrors the macOS `M3UParser.decode(_:)`
-     * chain, including the `looksLikeText` guard.
+     * Multi-encoding decode.
+     *
+     * The chain is strict on purpose: `String(bytes, UTF_8)` never
+     * throws, it silently replaces illegal bytes with U+FFFD. Because
+     * U+FFFD is not a control character the old `looksLikeText` guard
+     * accepted it, so a GBK/GB2312 playlist was returned as mojibake
+     * and the GB18030 branch below was unreachable dead code.
+     *
+     * So: decode strictly (REPORT on malformed input) and only accept a
+     * charset that turns the whole byte array into valid text.
      */
     fun decode(bytes: ByteArray): String? {
         // UTF-8 BOM
@@ -259,19 +267,17 @@ class M3UParser {
             if (looksLikeText(s)) return s
         }
 
-        // Plain UTF-8
-        runCatching { String(bytes, Charsets.UTF_8) }
-            .getOrNull()
-            ?.let { if (looksLikeText(it)) return it }
+        // Plain UTF-8, strict.
+        decodeStrict(bytes, Charsets.UTF_8)
+            ?.takeIf { looksLikeText(it) }
+            ?.let { return it }
 
         // GB18030 (Chinese IPTV providers) — JDK 17+ on macOS supports
         // GB18030 out of the box, so we don't need the Charset.forName
         // dance the macOS Swift code does with CoreFoundation.
-        runCatching {
-            val gb = java.nio.charset.Charset.forName("GB18030")
-            val s = String(bytes, gb)
-            if (looksLikeText(s)) s else null
-        }.getOrNull()?.let { return it }
+        decodeStrict(bytes, gb18030)
+            ?.takeIf { looksLikeText(it) }
+            ?.let { return it }
 
         // Latin-1 fallback — but only if it really looks like text.
         // (Latin-1 can decode any byte sequence, including binary, so
@@ -281,6 +287,23 @@ class M3UParser {
 
         return null
     }
+
+    /**
+     * Decode [bytes] with [charset], failing when the input contains
+     * bytes the charset cannot represent. Returns null instead of
+     * substituting U+FFFD.
+     */
+    private fun decodeStrict(bytes: ByteArray, charset: java.nio.charset.Charset): String? =
+        runCatching {
+            charset.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes))
+                .toString()
+        }.getOrNull()
+
+    private val gb18030: java.nio.charset.Charset =
+        java.nio.charset.Charset.forName("GB18030")
 
     /**
      * Heuristic: a decoded string is "text-like" if it has no NUL
