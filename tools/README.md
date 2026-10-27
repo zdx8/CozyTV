@@ -17,6 +17,24 @@ Signing uses `keystore.properties` in the repository root (gitignored) and the
 keystore at `app/signing/cozytv-release.keystore` — see
 `keystore.properties.example`. The script refuses to run without them.
 
+## Install on the TV
+
+`install-on-tv.sh` installs the release APK and handles the signature change:
+v0.3.x was signed with the local Android debug key, v0.4.0+ uses the real
+release key (`CN=CozyTV`), so Android refuses an in-place upgrade. The script
+backs up `/data/data/app.cozytv` (root only), uninstalls, installs and restores
+the data, so favourites, live sources and the home layout survive.
+
+```bash
+tools/install-on-tv.sh                 # dist/ 里最新的 release 包
+tools/install-on-tv.sh --debug         # debug 包
+```
+
+The TV's address changes with DHCP — it was `<TV_IP>` and is
+`<TV_IP>` now (MAC `00:00:00:00:00:00`, confirmed via the ARP table).
+Override it with `TV_HOST=<ip>:5555`. Network debugging has to be enabled on
+the TV: 设置 → 关于 → 连点版本号 7 次 → 开发者选项 → 「ADB 调试」+「网络调试」.
+
 ## On-device smoke test
 
 `test-on-device.sh` installs the APK, launches CozyTV, captures logcat and
