@@ -188,6 +188,18 @@ CozyTV/
 | TVLive（vendored 到 `:tvlive`） | 2.0.0-embedded | Apache-2.0（LICENSE/NOTICE 打进 APK `assets/tvlive/`） |
 | Aerial TV / CleanYourTV（参考与集成） | — | MIT |
 
+**公开仓库脱敏规范（2026-10-27 起执行）**
+
+本仓库是 **PUBLIC**，下列内容一律不得写入任何提交（包括本文档）：
+
+- 真实内网 IP、MAC 地址、局域网服务端口与路径 → 用 `<TV_IP>` / `<LAN_IP>` 占位
+- 本机绝对路径（含用户名）→ 用 `<repo>` / `<home>` 占位
+- 城市/位置线索（天气条、时区截图）→ 截图不得出现
+- 设备指纹（型号 + 固件 build + 存储容量 + 运行时长组合）
+- 真名与私人邮箱：提交作者统一为 `zdx8 <14200525+zdx8@users.noreply.github.com>`
+
+真实值只留在仓库外的会话记忆与本地构建脚本里。
+
 **凭据位置（不写明文）**
 
 - 发布签名：仓库根的 `keystore.properties`（600，gitignored）+
@@ -297,6 +309,7 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 |---|---|---|
 | 2026-10-25 | 0.3.0–0.3.4 | 首次成型：桌面、磁贴墙、控制中心、内嵌 TVLive、信号源、个性化 |
 | 2026-10-26 | 0.3.5 | 控制中心只读显示音量与亮度、开机自启、README 与截图更新 |
+| 2026-10-27 | 0.4.0（**已发布**） | **公开仓库脱敏**：删除 9 张含城市/设备指纹/局域网地址的截图、把 IP/MAC/本机路径/城市换成占位符、工具脚本不再内置默认 IP、测试夹具改用 example.com、提交作者改为 GitHub noreply；用 git-filter-repo 重写全部 20 个提交（文件内容 + 提交信息 + 作者），force push 覆盖 main 与 7 个 tag |
 | 2026-10-27 | 0.4.0（**已发布**） | **修复 20 类缺陷**：播放重连失效、缓冲态暂停失效、切台不播、GBK 订阅乱码、订阅 URL 解析崩溃、Android 6 `contentLengthLong` 崩溃、更新校验误判/漏判、首页预览无法恢复、直播源不同步、焦点跳回首项、提示被吞、OOM 与越界风险等；**新增正式签名 + 发布脚本 + 真机测试脚本 + 10 个回归单测**；同日经 `tools/release.sh 0.4.0 --publish` 发布到 GitHub Releases（tag `v0.4.0`，main 与 tag 同步到 GitHub 与 Gitea），资产 SHA-256 `ad98c125…`；**装机 MiTV-ASTP0 真机验证通过（冒烟 13/13）**，新增 `tools/install-on-tv.sh` |
 
 ---
