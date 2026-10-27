@@ -30,10 +30,11 @@ tools/install-on-tv.sh                 # dist/ 里最新的 release 包
 tools/install-on-tv.sh --debug         # debug 包
 ```
 
-The TV's address changes with DHCP — it was `<TV_IP>` and is
-`<TV_IP>` now (MAC `00:00:00:00:00:00`, confirmed via the ARP table).
-Override it with `TV_HOST=<ip>:5555`. Network debugging has to be enabled on
-the TV: 设置 → 关于 → 连点版本号 7 次 → 开发者选项 → 「ADB 调试」+「网络调试」.
+The TV's address changes with DHCP, so nothing here hard-codes it: every
+script requires `TV_HOST=<TV_IP>:5555`. Confirm the device identity with
+`arp -n <ip>` before acting — a stale IP may now belong to another host.
+Network debugging has to be enabled on the TV: 设置 → 关于 → 连点版本号 7 次
+→ 开发者选项 → 「ADB 调试」+「网络调试」。
 
 ## On-device smoke test
 
@@ -42,7 +43,7 @@ checks six scenarios (startup, home screen, live preview, embedded TVLive,
 backlight bridge, HOME resolution):
 
 ```bash
-TV_HOST=<TV_IP>:5555 tools/test-on-device.sh
+TV_HOST=<电视IP>:5555 tools/test-on-device.sh
 ```
 
 ## HOME diagnostics
@@ -51,7 +52,7 @@ TV_HOST=<TV_IP>:5555 tools/test-on-device.sh
 it never disables the stock launcher.
 
 ```bash
-TV_HOST=<TV_IP>:5555 tools/home_status.sh
+TV_HOST=<电视IP>:5555 tools/home_status.sh
 ```
 
 ## System cleanup adapter
@@ -62,13 +63,13 @@ firmware.
 
 ```bash
 # Read-only plan
-python3 tools/tvclean.py --device <TV_IP>:5555 --list examples/my-tv/debloat.txt
+python3 tools/tvclean.py --device <电视IP>:5555 --list examples/my-tv/debloat.txt
 
 # Apply one reviewed list
-python3 tools/tvclean.py --device <TV_IP>:5555 --list examples/my-tv/debloat.txt --apply
+python3 tools/tvclean.py --device <电视IP>:5555 --list examples/my-tv/debloat.txt --apply
 
 # Restore exactly the packages that were enabled before that run
-python3 tools/tvclean.py --device <TV_IP>:5555 \
+python3 tools/tvclean.py --device <电视IP>:5555 \
   --restore ~/.cozytv/cleanup/recovery-YYYYMMDD-HHMMSS.json
 ```
 
@@ -87,6 +88,6 @@ The integrated device profiles and wrappers are under
 [`cleanyourtv/`](cleanyourtv/README.md):
 
 ```bash
-TV_HOST=<TV_IP>:5555 tools/cleanyourtv/clean.sh
+TV_HOST=<电视IP>:5555 tools/cleanyourtv/clean.sh
 ```
 

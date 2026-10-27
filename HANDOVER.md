@@ -36,7 +36,7 @@ Debug`，证书 SHA-256 `b285093b…`），v0.4.0 起改为上面的正式密钥
 
 ## 3. 怎么跑起来
 
-- **构建环境实测**：macOS 27.2（26B118）、JDK 17.0.21（`<jdk17>`）、
+- **构建环境实测**：macOS 27.2（26B118）、JDK 17.0.21（`<JDK 17 安装路径>`）、
   Android SDK 36（`~/Library/Android/sdk`）、Gradle 8.14.3、AGP 8.12.0、Kotlin 2.2.10、
   compileSdk 36 / targetSdk 36 / minSdk 23、JDK target 17。
 - **首次构建**需要联网拉依赖（Compose BOM 2025.11.01、Media3 1.7.0、Room 2.7.0、
@@ -49,7 +49,7 @@ Debug`，证书 SHA-256 `b285093b…`），v0.4.0 起改为上面的正式密钥
 - **命令**：
 
 ```bash
-cd <repo>
+cd <仓库目录>
 export JAVA_HOME="$HOME/Library/Java/JavaVirtualMachines/jdk-17.0.21+9/Contents/Home"
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY   # 本机有代理时 Gradle 会卡住
 
@@ -58,7 +58,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n app.cozytv/.MainActivity
 
 tools/release.sh 0.4.0                     # 正式签名包 → dist/
-TV_HOST=<TV_IP>:5555 tools/test-on-device.sh   # 真机冒烟
+TV_HOST=<电视IP>:5555 tools/test-on-device.sh   # 真机冒烟
 ```
 
 - **前置条件**：一台 Android TV / 装了 Android TV 固件的盒子；首次使用需在
@@ -130,7 +130,7 @@ CozyTV/
 ### 未完成
 
 - **真机已验证**（2026-10-27 16:30，MiTV-ASTP0 / Android 9 / 1920×1080，电视 IP
-  `<TV_IP>`，MAC `00:00:00:00:00:00`）：v0.4.0 正式包装机成功，冒烟
+  `<电视 IP>`）：v0.4.0 正式包装机成功，冒烟
   **13/13 通过**，首页渲染正常（时钟、壁纸、天气、4 个磁贴 + 全部应用入口）。
   剩下三项属**配置**而非缺陷：① 默认桌面仍是原厂 `com.mitv.tvhome`（需在系统里把
   CozyTV 设为默认，或 `cmd package set-home-activity app.cozytv/.MainActivity`）；
@@ -190,7 +190,7 @@ CozyTV/
 
 **凭据位置（不写明文）**
 
-- 发布签名：`~/AiWork/Codex/CozyTV/keystore.properties`（600，gitignored）+
+- 发布签名：仓库根的 `keystore.properties`（600，gitignored）+
   `app/signing/cozytv-release.keystore`；**备份**在 `~/.cozytv/signing/`
   （keystore + `credentials.txt`，均 600）。
 - GitHub 凭据：macOS 钥匙串（`gh auth status` 可验证）。
@@ -212,7 +212,7 @@ CozyTV/
 **重置到初始状态**
 
 ```bash
-TV=<TV_IP>:5555
+TV=<电视IP>:5555
 adb -s $TV shell pm clear app.cozytv      # 清空全部偏好与数据库（恢复出厂）
 adb -s $TV uninstall app.cozytv           # 彻底卸载（换签名密钥时用这个）
 adb -s $TV shell rm /data/data/app.cozytv/cache/bing/*   # 只清壁纸缓存
@@ -238,7 +238,7 @@ adb -s $TV shell rm /data/data/app.cozytv/cache/bing/*   # 只清壁纸缓存
 照下面逐条执行，括号里是**预期实测值**。
 
 ```bash
-cd <repo>
+cd <仓库目录>
 export JAVA_HOME="$HOME/Library/Java/JavaVirtualMachines/jdk-17.0.21+9/Contents/Home"
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 ```
@@ -265,13 +265,12 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 7. **未签名保护**：`mv keystore.properties /tmp/kp && GRADLE_FLAGS="--offline" tools/release.sh 0.4.0`
    → 脚本在 preflight 阶段直接 `✗ keystore.properties missing`（不会产出无签名包）；
    跑完记得 `mv /tmp/kp keystore.properties`。
-8. **真机冒烟**：`TV_HOST=<TV_IP>:5555 tools/test-on-device.sh`
+8. **真机冒烟**：`TV_HOST=<电视IP>:5555 tools/test-on-device.sh`
    → 2026-10-27 实测：**13 通过 / 0 失败**（6 个场景：启动与崩溃、桌面、直播预览、
    内嵌 TVLive、背光桥、HOME 解析）。电视 `ro.product.model=MiTV-ASTP0`，Android 9。
    断言只认可观测信号（焦点窗口、进程存活、logcat 异常），不依赖应用打自定义日志。
 9. **装机截图**：`adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png`
-   → 首页截图实测 1920×1080：顶栏时钟 16:32 + 日期、Bing 壁纸、天气「<城市> 18°~22°
-   大部晴」、4 个应用磁贴 + 全部应用入口，无重叠 / 截断 / 错位。
+   → 首页截图实测 1920×1080：顶栏时钟 16:32 + 日期、Bing 壁纸、天气「<城市> <温度>」、4 个应用磁贴 + 全部应用入口，无重叠 / 截断 / 错位。
    **注意**：首页 20 秒无操作会自动切到 TVLive 全屏，截图要在 `am start` 后 20 秒内抓。
 
 ## 10. 下一步建议

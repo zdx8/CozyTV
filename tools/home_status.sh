@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # The TV's address changes with DHCP — pass it explicitly:
 #   TV_HOST=<TV_IP>:5555 tools/home_status.sh
-TV_HOST="${TV_HOST:-<TV_IP>:5555}"
+TV_HOST="${TV_HOST:?请设置 TV_HOST=<电视IP>:5555（电视：设置 → 开发者选项 → 网络调试）}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="${ADB:-$ANDROID_HOME/platform-tools/adb}"
 

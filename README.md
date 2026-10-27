@@ -3,8 +3,6 @@
 面向 Android TV / Google TV 的轻量桌面，使用 Kotlin、Jetpack Compose 和 Media3，
 针对遥控器与低配置电视优化。
 
-![CozyTV 首页](docs/cozytv-home.jpg)
-
 ## 主要功能
 
 - 16:9 首页直播预览，进入桌面自动播放，支持多个 M3U / M3U8 源自动切换。
@@ -25,8 +23,6 @@
 - 设备信息检查页只读显示系统、屏幕、内存、存储、网络和运行状态。
 
 ## 界面
-
-![控制中心](docs/cozytv-control-center-live.jpg)
 
 ![全部应用](docs/cozytv-apps.jpg)
 
@@ -113,7 +109,7 @@ Release APK：`app/build/outputs/apk/release/app-release.apk`
 真机冒烟测试：
 
 ```bash
-TV_HOST=<TV_IP>:5555 tools/test-on-device.sh
+TV_HOST=<电视IP>:5555 tools/test-on-device.sh
 ```
 
 ### 当前版本

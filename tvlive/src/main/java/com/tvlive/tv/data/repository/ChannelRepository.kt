@@ -158,7 +158,7 @@ class ChannelRepository(
      *
      * `URI.create(url)` throws on URLs containing spaces or non-ASCII
      * characters — very common in Chinese IPTV subscriptions
-     * (`http://example.com:8080/我的订阅.m3u`). The old code called it
+     * (`http://<TV_IP>:8080/我的订阅.m3u`). The old code called it
      * unguarded, so the exception aborted an otherwise successful
      * download and the user saw "订阅加载失败".
      */

@@ -11,10 +11,10 @@ points, not universal lists. Always verify the TV model and firmware notes.
 
 ```bash
 # Read-only plan for the connected TV
-TV_HOST=<TV_IP>:5555 tools/cleanyourtv/clean.sh
+TV_HOST=<电视IP>:5555 tools/cleanyourtv/clean.sh
 
 # After reviewing every package and receiving user approval
-TV_HOST=<TV_IP>:5555 tools/cleanyourtv/clean.sh --apply
+TV_HOST=<电视IP>:5555 tools/cleanyourtv/clean.sh --apply
 ```
 
 The wrapper reads the model, device, product, and board from the TV, selects the
@@ -34,7 +34,7 @@ entire device profile, or pass a custom comma-separated subset.
 To force a profile:
 
 ```bash
-TV_HOST=<TV_IP>:5555 \
+TV_HOST=<电视IP>:5555 \
   PROFILE=tools/cleanyourtv/profiles/xiaomi-mitv-astp0.txt \
   tools/cleanyourtv/clean.sh
 ```
@@ -51,7 +51,7 @@ python3 tools/cleanyourtv/select_profile.py --list ignored
 prints its path. Undo with:
 
 ```bash
-TV_HOST=<TV_IP>:5555 tools/cleanyourtv/restore.sh \
+TV_HOST=<电视IP>:5555 tools/cleanyourtv/restore.sh \
   /path/to/recovery.json
 ```
 

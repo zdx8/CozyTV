@@ -5,7 +5,7 @@ set -euo pipefail
 # Default is a read-only dry run. Nothing is disabled until --apply is supplied.
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-TV_HOST="${TV_HOST:-<TV_IP>:5555}"
+TV_HOST="${TV_HOST:?请设置 TV_HOST=<电视IP>:5555（电视：设置 → 开发者选项 → 网络调试）}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="${ADB:-$ANDROID_HOME/platform-tools/adb}"
 PROFILE="${PROFILE:-}"

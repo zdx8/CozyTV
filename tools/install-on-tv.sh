@@ -7,7 +7,7 @@
 # 直接 `adb install -r` 会报 INSTALL_FAILED_UPDATE_INCOMPATIBLE。
 #
 # 本脚本会：
-#   1. 连接电视（TV_HOST，默认 <TV_IP>:5555）
+#   1. 连接电视（必须设置 TV_HOST=<电视IP>:5555）
 #   2. 看电视上是否已装 CozyTV、什么版本
 #   3. 先试覆盖安装；失败且是签名冲突时：
 #      - 有 root 就先把 /data/data/app.cozytv 整包备份（tar）
@@ -18,7 +18,7 @@
 # 用法：
 #   tools/install-on-tv.sh                 # 装 dist/ 里最新的 release 包
 #   tools/install-on-tv.sh --debug         # 装 debug 包
-#   TV_HOST=<TV_IP>:5555 tools/install-on-tv.sh
+#   TV_HOST=<电视IP>:5555 tools/install-on-tv.sh
 #
 set -uo pipefail
 
@@ -26,7 +26,7 @@ cd "$(dirname "$0")/.."
 
 export PATH="$HOME/Library/Android/sdk/platform-tools:$PATH"
 
-TV_HOST="${TV_HOST:-<TV_IP>:5555}"
+TV_HOST="${TV_HOST:?请设置 TV_HOST=<电视IP>:5555（电视：设置 → 开发者选项 → 网络调试）}"
 PKG="app.cozytv"
 ACT="$PKG/.MainActivity"
 USE_DEBUG=0

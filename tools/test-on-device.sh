@@ -16,7 +16,7 @@
 # 用法：
 #   tools/test-on-device.sh                 # 用 dist/ 或 release 产物
 #   tools/test-on-device.sh --debug         # 用 debug 包
-#   TV_HOST=<TV_IP>:5555 tools/test-on-device.sh
+#   TV_HOST=<电视IP>:5555 tools/test-on-device.sh
 #
 set -uo pipefail
 
