@@ -22,7 +22,7 @@ MiTV-ASTP0，Android 9 / 1920×1080）。
 | 安装包（已签名，已发布） | `dist/CozyTV-v0.4.0-release.apk` | v0.4.0 (versionCode 9) | SHA-256 `ad98c12542d4cd6a11c569928f794aa66d4ccc09ab74314b6f005ab5d260088a`，3,584,636 字节（与线上资产 digest 一致） |
 | 摘要文件 | `dist/CozyTV-v0.4.0-release.apk.sha256` | — | 同上 |
 | 签名证书 | `app/signing/cozytv-release.keystore`（不入库） | — | 证书 SHA-256 `0a46b303962959c8b85df33b25c31c1d5ecfd21d4ba6cf5a36ae093d6128a04b`，DN `CN=CozyTV, OU=zdx8, O=zdx8, L=Beijing, ST=Beijing, C=CN` |
-| 源码 | GitHub `zdx8/CozyTV`（`main`）· Gitea `ssh://gitea/ZYG/CozyTV.git` | 本地 HEAD `1be6384` + 1 个未推送提交 | — |
+| 源码 | GitHub `zdx8/CozyTV`（`main`，2026-10-27 脱敏后重建，历史已重写）· Gitea `ssh://gitea/ZYG/CozyTV.git` | 本地 HEAD `df06ecb` | — |
 | 已发布的线上版本 | GitHub Releases v0.3.0 – **v0.4.0** | **v0.4.0**（2026-10-27 发布）<br>v0.3.5（2026-10-26，4 次下载） | v0.4.0 资产 `CozyTV-v0.4.0-release.apk` SHA-256 `ad98c125…` 3,584,636 字节<br>v0.3.5 资产 SHA-256 `c1a4cd27…` 3,579,097 字节 |
 
 **已对外发布**：有，GitHub Releases 共 **7 个**（v0.3.0 – v0.4.0）；tag 与 main 已同时推到
@@ -309,6 +309,7 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 |---|---|---|
 | 2026-10-25 | 0.3.0–0.3.4 | 首次成型：桌面、磁贴墙、控制中心、内嵌 TVLive、信号源、个性化 |
 | 2026-10-26 | 0.3.5 | 控制中心只读显示音量与亮度、开机自启、README 与截图更新 |
+| 2026-10-27 | 0.4.0（**已发布**） | **仓库重建（彻底清除）**：旧仓库转私有归档后，在 `zdx8/CozyTV` 位置重建公开仓库并推入重写后的 21 个提交与 7 个 tag，v0.4.0 Release 已重新上传同一份 APK（3,584,636 B，SHA-256 `ad98c125…`）。重建后旧 commit 按 SHA 查询返回 422，历史中不再有任何真名/邮箱/IP/MAC/城市。本机 git 全局身份已改为 `zdx8 <14200525+zdx8@users.noreply.github.com>` |
 | 2026-10-27 | 0.4.0（**已发布**） | **公开仓库脱敏**：删除 9 张含城市/设备指纹/局域网地址的截图、把 IP/MAC/本机路径/城市换成占位符、工具脚本不再内置默认 IP、测试夹具改用 example.com、提交作者改为 GitHub noreply；用 git-filter-repo 重写全部 20 个提交（文件内容 + 提交信息 + 作者），force push 覆盖 main 与 7 个 tag |
 | 2026-10-27 | 0.4.0（**已发布**） | **修复 20 类缺陷**：播放重连失效、缓冲态暂停失效、切台不播、GBK 订阅乱码、订阅 URL 解析崩溃、Android 6 `contentLengthLong` 崩溃、更新校验误判/漏判、首页预览无法恢复、直播源不同步、焦点跳回首项、提示被吞、OOM 与越界风险等；**新增正式签名 + 发布脚本 + 真机测试脚本 + 10 个回归单测**；同日经 `tools/release.sh 0.4.0 --publish` 发布到 GitHub Releases（tag `v0.4.0`，main 与 tag 同步到 GitHub 与 Gitea），资产 SHA-256 `ad98c125…`；**装机 MiTV-ASTP0 真机验证通过（冒烟 13/13）**，新增 `tools/install-on-tv.sh` |
 
