@@ -83,7 +83,8 @@ echo "==> 2. 清空 logcat 并启动 …"
 adb_cmd logcat -c
 adb_cmd shell am force-stop "$PKG"
 sleep 1
-adb_cmd shell am start -n "$ACT"
+START_OUT="$(adb_cmd shell am start -n "$ACT" 2>&1 | tr -d '\r')"
+echo "$START_OUT" | sed 's/^/  /'
 
 sleep 6
 LOG=/tmp/cozytv-test.log
@@ -116,15 +117,24 @@ echo "=========================================="
 check_absent "无 FATAL EXCEPTION"   '^.{0,40}FATAL EXCEPTION'
 check_absent "无 AndroidRuntime 错误" '^.{0,40}AndroidRuntime:'
 check_absent "无 ANR"                'ANR in app\.cozytv'
-check        "MainActivity 已启动"    'Starting:.*app\.cozytv'
+check        "MainActivity 已启动"    'cmp=app\.cozytv/.MainActivity'
+# logcat 里没有 "Starting:" 字样（那是 am start 打到 stdout 的），
+# 焦点窗口才算"首页真的显示出来了"的证据
+FOCUS="$(adb_cmd shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus' | tr -d '\r')"
+if echo "$FOCUS" | grep -q 'app\.cozytv'; then
+  echo "  ✓ 首页窗口已获得焦点"; PASS=$((PASS+1))
+else
+  echo "  ✗ 首页窗口未获得焦点（当前：$(echo "$FOCUS" | sed 's/.* //')）"; FAIL=$((FAIL+1))
+fi
 
 echo
 echo "=========================================="
 echo "  场景 2：桌面与 HOME"
 echo "=========================================="
-check "绘制了首页"          'CozyTV|LauncherViewModel|HomeScreen'
-check "扫描应用"            'LauncherRepository|TvApp'
-check "壁纸/天气请求"       'Bing|Weather|open-meteo|wttr'
+# 应用不打印类名到 logcat，断言只能基于可观测的系统状态
+# 这两条是"不该出现"的断言：必须用 check_absent（存在即失败）
+check_absent "无网络异常"     'app\.cozytv.*(UnknownHostException|SSLException|SocketTimeout)'
+check_absent "无渲染异常"     'FATAL EXCEPTION.*cozytv|OpenGLRenderer.*cozytv'
 
 echo
 echo "=========================================="
@@ -146,6 +156,11 @@ echo "=========================================="
 echo "  场景 5：背光与系统桥接"
 echo "=========================================="
 check "背光探测"            'backlight|MitvPanel|XiaomiBrightness'
+A11Y="$(adb_cmd shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r')"
+if echo "$A11Y" | grep -q 'app\.cozytv'; then
+  echo "  ✓ Home 键守护无障碍服务已开启"; PASS=$((PASS+1))
+else
+  echo "  ! Home 键守护未开启（按 Home 会回原厂桌面）"; fi
 
 echo
 echo "=========================================="
@@ -167,5 +182,7 @@ echo "  4. 按 HOME 回到桌面，再进入应用，直播预览应自动恢复
 echo
 echo "  截图：adb_cmd shell screencap -p /sdcard/screen.png"
 echo "        adb_cmd pull /sdcard/screen.png ~/Desktop/cozytv-screen.png"
+echo
+echo "  提示：首页 20 秒无操作会自动切到 TVLive 全屏 —— 想截首页请在 am start 后 20 秒内截。" 
 
 exit $FAIL
