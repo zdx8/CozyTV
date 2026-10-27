@@ -10,7 +10,8 @@
 CozyTV 是一个面向 Android TV / Google TV 的**第三方桌面**（Kotlin + Jetpack Compose +
 Media3），把电视的首页换成直播预览 + Apple TV 风格磁贴墙，并内置完整 TVLive 直播客户端；
 当前状态 **v0.4.0 已发布（GitHub Releases，2026-10-27）**，20 类缺陷已修复并补了 10 个
-回归单测，发布包用正式密钥签名；**修复后的版本尚未在真机上跑过**（见第 5 节）。
+回归单测，发布包用正式密钥签名；**已在真机 MiTV-ASTP0（Android 9）装机验证通过**
+（冒烟 13/13，见第 9 节）。
 使用场景：把闲置的安卓电视/盒子变成能看 IPTV 的桌面（作者自用，README 里的设备是
 MiTV-ASTP0，Android 9 / 1920×1080）。
 
@@ -128,10 +129,13 @@ CozyTV/
 
 ### 未完成
 
-- **修复后的版本尚未在真机验证**：电视在 `<TV_IP>`（ADB 网络调试），但
-  2026-10-27 本机已在 `192.168.2.x` 网段（路由器/网络变更），到 `192.168.0.x` 无路由，
-  `ping` 与 `adb connect` 均不通；`192.168.2.x` 邻居里也没有 5555/5554 开放的设备。
-  需要把本机接回同一网段，或确认电视的新 IP 后再跑冒烟脚本。
+- **真机已验证**（2026-10-27 16:30，MiTV-ASTP0 / Android 9 / 1920×1080，电视 IP
+  `<TV_IP>`，MAC `00:00:00:00:00:00`）：v0.4.0 正式包装机成功，冒烟
+  **13/13 通过**，首页渲染正常（时钟、壁纸、天气、4 个磁贴 + 全部应用入口）。
+  剩下三项属**配置**而非缺陷：① 默认桌面仍是原厂 `com.mitv.tvhome`（需在系统里把
+  CozyTV 设为默认，或 `cmd package set-home-activity app.cozytv/.MainActivity`）；
+  ② 电视上未配置 M3U 订阅源，故首页直播预览无画面（TVLive 页提示「未配置订阅源」）；
+  ③ Home 键守护的无障碍服务未开启，按 Home 会回原厂桌面。
 - 没有 CI（GitHub Actions）：构建、签名、发版全靠 `tools/release.sh` 手工跑。
 - 没有 `docs/ARCHITECTURE.md`，架构只存在于本文件第 4 节。
 
@@ -261,18 +265,23 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 7. **未签名保护**：`mv keystore.properties /tmp/kp && GRADLE_FLAGS="--offline" tools/release.sh 0.4.0`
    → 脚本在 preflight 阶段直接 `✗ keystore.properties missing`（不会产出无签名包）；
    跑完记得 `mv /tmp/kp keystore.properties`。
-8. **真机冒烟**：`TV_HOST=<电视IP>:5555 tools/test-on-device.sh`
-   → 安装 → 启动 → 抓 logcat → 6 个场景逐条 PASS/FAIL，最后打印当前 HOME
-   `app.cozytv/.MainActivity`。**这一步尚未在真机跑过**（2026-10-27 局域网内没找到
-   开启网络调试的设备）。
+8. **真机冒烟**：`TV_HOST=<TV_IP>:5555 tools/test-on-device.sh`
+   → 2026-10-27 实测：**13 通过 / 0 失败**（6 个场景：启动与崩溃、桌面、直播预览、
+   内嵌 TVLive、背光桥、HOME 解析）。电视 `ro.product.model=MiTV-ASTP0`，Android 9。
+   断言只认可观测信号（焦点窗口、进程存活、logcat 异常），不依赖应用打自定义日志。
+9. **装机截图**：`adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png`
+   → 首页截图实测 1920×1080：顶栏时钟 16:32 + 日期、Bing 壁纸、天气「<城市> 18°~22°
+   大部晴」、4 个应用磁贴 + 全部应用入口，无重叠 / 截断 / 错位。
+   **注意**：首页 20 秒无操作会自动切到 TVLive 全屏，截图要在 `am start` 后 20 秒内抓。
 
 ## 10. 下一步建议
 
 1. **发布 v0.4.0 并写清「需卸载旧版」**（优先级最高）。v0.3.5 只有 4 次下载，
    现在迁移成本最低；越晚发布，迁移的人越多。改动：`tools/release.sh 0.4.0 --publish`
    + Release notes 里写明卸载步骤。
-2. **把真机冒烟跑通**。`tools/test-on-device.sh` 已就绪，只差一台开启网络调试的电视；
-   跑通后把 PASS/FAIL 结果补进本文件第 9 节。
+2. **在电视上完成三项配置**（不是代码问题）：把 CozyTV 设为默认桌面、填入 M3U 订阅源
+   （否则首页直播预览无画面）、开启 Home 键守护的无障碍服务。装包可用
+   `tools/install-on-tv.sh`（已处理 debug 签名 → 正式签名的迁移，有 root 时自动备份还原数据）。
 3. **补 GitHub Actions**：把 `assembleRelease + testDebugUnitTest + lintDebug` 挂到
    PR，签名走 repository secrets（照抄 TVLive 的 `.github/workflows/release-build.yml` 思路）。
    涉及：新增 `.github/workflows/`、`app/build.gradle.kts` 的 signingConfig（已支持从
@@ -289,7 +298,7 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 |---|---|---|
 | 2026-10-25 | 0.3.0–0.3.4 | 首次成型：桌面、磁贴墙、控制中心、内嵌 TVLive、信号源、个性化 |
 | 2026-10-26 | 0.3.5 | 控制中心只读显示音量与亮度、开机自启、README 与截图更新 |
-| 2026-10-27 | 0.4.0（**已发布**） | **修复 20 类缺陷**：播放重连失效、缓冲态暂停失效、切台不播、GBK 订阅乱码、订阅 URL 解析崩溃、Android 6 `contentLengthLong` 崩溃、更新校验误判/漏判、首页预览无法恢复、直播源不同步、焦点跳回首项、提示被吞、OOM 与越界风险等；**新增正式签名 + 发布脚本 + 真机测试脚本 + 10 个回归单测**；同日经 `tools/release.sh 0.4.0 --publish` 发布到 GitHub Releases（tag `v0.4.0`，main 与 tag 同步到 GitHub 与 Gitea），资产 SHA-256 `ad98c125…` |
+| 2026-10-27 | 0.4.0（**已发布**） | **修复 20 类缺陷**：播放重连失效、缓冲态暂停失效、切台不播、GBK 订阅乱码、订阅 URL 解析崩溃、Android 6 `contentLengthLong` 崩溃、更新校验误判/漏判、首页预览无法恢复、直播源不同步、焦点跳回首项、提示被吞、OOM 与越界风险等；**新增正式签名 + 发布脚本 + 真机测试脚本 + 10 个回归单测**；同日经 `tools/release.sh 0.4.0 --publish` 发布到 GitHub Releases（tag `v0.4.0`，main 与 tag 同步到 GitHub 与 Gitea），资产 SHA-256 `ad98c125…`；**装机 MiTV-ASTP0 真机验证通过（冒烟 13/13）**，新增 `tools/install-on-tv.sh` |
 
 ---
 
