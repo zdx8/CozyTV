@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CozyTV</string>
+    <string name="home_accessibility_description">仅拦截 Home 键并返回 CozyTV，不读取屏幕内容；主动进入原厂桌面时保持原厂桌面不变。</string>
+    <string name="favorite_added">已添加到首页应用</string>
+    <string name="favorite_removed">已从首页应用移除</string>
+</resources>
+

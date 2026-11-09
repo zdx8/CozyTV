@@ -1,0 +1,5 @@
+#EXTM3U
+# CozyTV bundled demo stream for layout and playback verification.
+# Replace this in Settings with your own licensed IPTV playlist.
+#EXTINF:-1 tvg-id="demo" group-title="Demo",CozyTV Demo
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8

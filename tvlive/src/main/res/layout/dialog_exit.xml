@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CozyTV-style confirmation card: dark blue glass, rounded corners, white focus. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="420dp"
+    android:layout_height="wrap_content"
+    android:background="@drawable/dialog_exit_bg"
+    android:orientation="vertical"
+    android:paddingStart="28dp"
+    android:paddingTop="24dp"
+    android:paddingEnd="28dp"
+    android:paddingBottom="20dp">
+
+    <TextView
+        android:id="@+id/exit_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="确定要退出吗？"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/exit_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="退出后将停止当前直播"
+        android:textColor="#B3FFFFFF"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="22dp"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="128dp"
+            android:layout_height="48dp"
+            android:background="@drawable/dialog_btn_neutral"
+            android:clickable="true"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="@color/dialog_button_text"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/btn_exit"
+            android:layout_width="128dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/dialog_btn_danger"
+            android:clickable="true"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:text="退出"
+            android:textColor="@color/dialog_button_text"
+            android:textSize="14sp" />
+    </LinearLayout>
+</LinearLayout>
